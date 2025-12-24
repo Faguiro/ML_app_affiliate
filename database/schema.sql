@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS tracked_links (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS telegram_sent (
+    id INTEGER PRIMARY KEY,
+    tracked_link_id INTEGER UNIQUE,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    success BOOLEAN DEFAULT 1,
+    error_message TEXT,
+    FOREIGN KEY (tracked_link_id) REFERENCES tracked_links(id)
+);
+
 
 CREATE TABLE IF NOT EXISTS sent_links (
     id INTEGER PRIMARY KEY,

@@ -30,7 +30,8 @@ export class AffiliateService {
                     let metadata = {
                         product_title: result.product_title,
                         price: result.price || '',
-                        suggested_text: result.suggested_text || ''
+                        suggested_text: result.suggested_text || '',
+                        product_image: result.product_image || null
                     };
 
                     // Se IA disponível, aprimora a descrição
@@ -114,7 +115,8 @@ export class AffiliateService {
                             affiliate_link: affiliateLink,
                             product_title: data.product_title || '',
                             price: data.price || '',
-                            suggested_text: data.suggested_text || ''
+                            suggested_text: data.suggested_text || '',
+                            product_image: data.product_image || null
                         };
                     }
                 }
@@ -123,7 +125,7 @@ export class AffiliateService {
                     throw new Error(apiResponse.message || 'Processamento falhou');
                 }
 
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                await new Promise(resolve => setTimeout(resolve, 50000));
 
             } catch (error) {
                 console.error(`Check ${check} falhou:`, error.message);

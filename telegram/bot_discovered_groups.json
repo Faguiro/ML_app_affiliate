@@ -1,0 +1,20 @@
+{
+  "bot": {
+    "id": 8515179246,
+    "username": "Afiliados2026_Bot",
+    "first_name": "Afiliados_bot"
+  },
+  "groups_found": 1,
+  "groups": [
+    {
+      "id": -1003528813782,
+      "title": "FBot",
+      "source": "shared_group",
+      "entity": "Channel(id=3528813782, title='FBot', photo=ChatPhoto(photo_id=5042116637586295889, dc_id=1, has_video=False, stripped_thumb=b'\\x01\\x08\\x08\\xab-\\xba\\xb3\\x12\\x92\\x179\\xe4\\x91\\x81E\\x14R\\xe6\\xb1J)\\xab\\x9f'), date=datetime.datetime(2025, 12, 14, 4, 16, 55, tzinfo=datetime.timezone.utc), creator=True, left=False, broadcast=False, verified=False, megagroup=True, restricted=False, signatures=False, min=False, scam=False, has_link=False, has_geo=False, slowmode_enabled=False, call_active=False, call_not_empty=False, fake=False, gigagroup=False, noforwards=False, join_to_send=False, join_request=False, forum=False, stories_hidden=False, stories_hidden_min=False, stories_unavailable=True, signature_profiles=False, autotranslation=False, broadcast_messages_allowed=False, monoforum=False, forum_tabs=False, access_hash=-8826951777426935056, username=None, restriction_reason=[], admin_rights=ChatAdminRights(change_info=True, post_messages=True, edit_messages=True, delete_messages=True, ban_users=True, invite_users=True, pin_messages=True, add_admins=True, anonymous=False, manage_call=True, other=True, manage_topics=True, post_stories=True, edit_stories=True, delete_stories=True, manage_direct_messages=True), banned_rights=None, default_banned_rights=ChatBannedRights(until_date=datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=datetime.timezone.utc), view_messages=False, send_messages=False, send_media=False, send_stickers=False, send_gifs=False, send_games=False, send_inline=False, embed_links=False, send_polls=False, change_info=False, invite_users=False, pin_messages=False, manage_topics=False, send_photos=False, send_videos=False, send_roundvideos=False, send_audios=False, send_voices=False, send_docs=False, send_plain=False), participants_count=3, usernames=[], stories_max_id=None, color=None, profile_color=None, emoji_status=None, level=None, subscription_until_date=None, bot_verification_icon=None, send_paid_messages_stars=None, linked_monoforum_id=None)",
+      "username": null,
+      "type": "supergroup",
+      "is_admin": false,
+      "can_send": true
+    }
+  ]
+}

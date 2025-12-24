@@ -1,0 +1,15 @@
+{
+  "groups": [
+    {
+      "id": -1003528813782,
+      "name": "FBot",
+      "active": true,
+      "tags": [
+        "supergrupo",
+        "geral"
+      ]
+    }
+  ],
+  "generated_by": "bot_discovery",
+  "note": "Adicione mais tags baseadas no conteúdo do grupo"
+}

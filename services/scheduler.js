@@ -101,7 +101,9 @@ export class Scheduler {
                             const message = this.createMessage(link);
                             console.log(`  ✉️  Enviando mensagem...`);
 
-                            await this.sock.sendMessage(group.group_jid, { text: message });
+                            const payload = this.createMessagePayload(link);
+
+                            await this.sock.sendMessage(group.group_jid, payload);
 
                             // Registrar envio
                             db.run(
@@ -112,6 +114,8 @@ export class Scheduler {
 
                             // Incrementar contador
                             db.incrementSentCount(group.group_jid);
+
+
 
                             console.log(`  ✅ Enviado com sucesso para ${group.group_name}`);
 
@@ -146,6 +150,22 @@ export class Scheduler {
             this.sending = false;
         }
     }
+
+    createMessagePayload(link) {
+        const metadata = link.metadata ? JSON.parse(link.metadata) : {};
+        const caption = this.createMessage(link);
+
+        if (metadata.product_image) {
+            console.log('  🖼️  Enviando com imagem:', metadata.product_image);
+            return {
+                image: { url: metadata.product_image },
+                caption: caption
+            };
+        }
+
+        return { text: caption };
+    }
+
 
     createMessage(link) {
         try {

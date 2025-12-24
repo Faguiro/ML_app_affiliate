@@ -57,11 +57,11 @@ class Config {
 
     // Agendamento
     get processInterval() {
-        return parseInt(process.env.SCHEDULER_PROCESS_INTERVAL) || 100000;
+        return parseInt(process.env.SCHEDULER_PROCESS_INTERVAL) || 300000;
     }
 
     get sendInterval() {
-        return parseInt(process.env.SCHEDULER_SEND_INTERVAL) || 100000;
+        return parseInt(process.env.SCHEDULER_SEND_INTERVAL) || 300000;
     }
 
     // Limites

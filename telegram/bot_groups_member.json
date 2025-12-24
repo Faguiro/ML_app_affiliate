@@ -1,0 +1,225 @@
+{
+  "bot": {
+    "id": 8515179246,
+    "username": "Afiliados2026_Bot",
+    "first_name": "Afiliados_bot"
+  },
+  "statistics": {
+    "total_groups_checked": 21,
+    "bot_is_member": 21,
+    "admin_groups": 0,
+    "sendable_groups": 21
+  },
+  "groups": [
+    {
+      "id": 3528813782,
+      "title": "FBot",
+      "username": null,
+      "type": "supergroup",
+      "participants_count": 3,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 1438644229,
+      "title": "sᴀᴜ́ᴅᴇ ᴍᴇɴᴛᴀʟ ᴇ ᴇsᴘᴀᴄ̧ᴏ ᴘᴏʟɪ́ᴛɪᴄᴏ ɴᴀ̃ᴏ ʙɪɴᴀ́ʀɪᴏ ✊💜",
+      "username": "meus_rabiscos",
+      "type": "channel",
+      "participants_count": 2431,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 12
+    },
+    {
+      "id": 1189912272,
+      "title": "FREUD E LACAN! ⏳📚📝",
+      "username": "estudosdefreudelacan",
+      "type": "supergroup",
+      "participants_count": 8939,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 60
+    },
+    {
+      "id": 1558763365,
+      "title": "💖 Gostei, Logo Postei 💖",
+      "username": "GosteiLogoPostei",
+      "type": "channel",
+      "participants_count": 4605,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 5
+    },
+    {
+      "id": 1318057639,
+      "title": "BIBLIOTECA VIRTUAL DE PSICOLOGIA, PSICANÁLISE, PEDAGOGIA E FILOSOFIA! 📚📝💆",
+      "username": "abibliotecadelivros",
+      "type": "supergroup",
+      "participants_count": 24138,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 391
+    },
+    {
+      "id": 1255501862,
+      "title": "☘𝗧𝗲𝗿𝗮𝗽𝗶𝗮 𝗩𝗶𝗿𝘁𝘂𝗮𝗹",
+      "username": "TerapiaVirtual",
+      "type": "channel",
+      "participants_count": 15421,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 6
+    },
+    {
+      "id": 1830184857,
+      "title": "- ̗̀🎗ANSIEDADE & DEPRESSÃO",
+      "username": "Ansiedade_Depressao",
+      "type": "channel",
+      "participants_count": 17051,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 24
+    },
+    {
+      "id": 4948363691,
+      "title": "FBot",
+      "username": null,
+      "type": "group",
+      "participants_count": 0,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2138692644,
+      "title": "Professora Lúcia Helena Galvão",
+      "username": null,
+      "type": "channel",
+      "participants_count": 96979,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 7
+    },
+    {
+      "id": 1417303890,
+      "title": "Canal DEPOIMENTOS TRG",
+      "username": "depoimentosTRG",
+      "type": "channel",
+      "participants_count": 11578,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 369
+    },
+    {
+      "id": 2291271188,
+      "title": "🎧 AUDIOLIVROS GRÁTIS 📚",
+      "username": null,
+      "type": "channel",
+      "participants_count": 51970,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2130916566,
+      "title": "CloudMineCrypto.com - Bitcoin Mining in the Cloud",
+      "username": "thatminer",
+      "type": "channel",
+      "participants_count": 78223,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 34
+    },
+    {
+      "id": 2073815198,
+      "title": "PEPE Miner Community",
+      "username": "pepe_miner_community",
+      "type": "channel",
+      "participants_count": 395614,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 100
+    },
+    {
+      "id": 1606981640,
+      "title": "Livros para Consteladores e Terapeutas",
+      "username": "jeanineohf",
+      "type": "channel",
+      "participants_count": 1898,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2197801348,
+      "title": "Дропни ЭТОn",
+      "username": "dropmetono",
+      "type": "channel",
+      "participants_count": 50572,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 16
+    },
+    {
+      "id": 2152915652,
+      "title": "Del",
+      "username": null,
+      "type": "supergroup",
+      "participants_count": 28113,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2222281270,
+      "title": "Banana Gun Bot",
+      "username": null,
+      "type": "channel",
+      "participants_count": 29076,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2221119808,
+      "title": "Banana Gun Bot",
+      "username": null,
+      "type": "channel",
+      "participants_count": 52937,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2170551128,
+      "title": "USDT NEWS CHANNEL",
+      "username": "USDT_NEWS_CHANNEL",
+      "type": "channel",
+      "participants_count": 17520,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2207098398,
+      "title": "Deleted Account",
+      "username": null,
+      "type": "supergroup",
+      "participants_count": 86897,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    },
+    {
+      "id": 2201849979,
+      "title": "Deleted Account",
+      "username": null,
+      "type": "channel",
+      "participants_count": 944582,
+      "is_admin": false,
+      "can_send": true,
+      "unread_count": 0
+    }
+  ]
+}
