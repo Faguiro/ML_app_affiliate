@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Controle do Bot</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #eee;
+            padding: 20px;
+        }
+
+        button {
+            margin-right: 10px;
+            padding: 10px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .danger {
+            background: #a00;
+            color: #fff;
+        }
+
+        #qr {
+            margin-top: 20px;
+            max-width: 300px;
+            display: none;
+        }
+
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Controle do Bot</h2>
+
+    <button onclick="start()">Iniciar</button>
+    <button onclick="stop()">Parar</button>
+    <button class="danger" onclick="resetSession()">Apagar Sessão</button>
+
+    <p id="status">Status: --</p>
+    <div id="connectionInfo" style="margin-top:15px;"></div>
+    <img id="qr" />
+
+    <script>
+        async function start() {
+            await fetch('/start', { method: 'POST' });
+            load();
+        }
+
+        async function stop() {
+            await fetch('/stop', { method: 'POST' });
+            load();
+        }
+
+        async function resetSession() {
+            const confirmReset = confirm(
+                'Isso irá apagar a sessão do WhatsApp.\n' +
+                'Use apenas se o QR não aparecer ou houver erro de login.\n\nDeseja continuar?'
+            );
+
+            if (!confirmReset) return;
+
+            const res = await fetch('/reset-session', { method: 'POST' });
+            const data = await res.json();
+
+            alert(data.message);
+            load();
+        }
+
+        async function load() {
+            const res = await fetch('/status');
+            const data = await res.json();
+
+            const statusEl = document.getElementById('status');
+            const qrEl = document.getElementById('qr');
+            const infoEl = document.getElementById('connectionInfo');
+
+            if (data.running) {
+                statusEl.innerText = 'Status: ONLINE';
+            } else {
+                statusEl.innerText = 'Status: OFFLINE';
+            }
+
+            if (data.qr) {
+                qrEl.src = data.qr;
+                qrEl.style.display = 'block';
+            } else {
+                qrEl.style.display = 'none';
+            }
+
+            if (data.connection) {
+                infoEl.innerHTML = `
+        <strong>Conectado como:</strong><br>
+        Nome: ${data.connection.name}<br>
+        Número: ${data.connection.phone || '--'}<br>
+        Conectado em: ${new Date(data.connection.connectedAt).toLocaleString()}
+    `;
+            } else {
+                infoEl.innerHTML = '';
+            }
+
+        }
+
+        setInterval(load, 2000);
+        load();
+    </script>
+
+</body>
+
+</html>

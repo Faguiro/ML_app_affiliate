@@ -14,13 +14,17 @@ let sock = null;
 let scheduler = null;
 let isRunning = false;
 let reconnectTimeout = null;
+let lastQR = null;
+let manualStop = false;
+let connectionInfo = null;
 
 // ==================== CONFIGURAÇÃO INICIAL ====================
 // Configura handlers UMA ÚNICA VEZ no início
 setupGlobalHandlers();
 
-async function startBot() {
+export async function startBot() {
     // Evita múltiplas instâncias
+    manualStop = false;
     if (isRunning) {
         log.warn('⚠️ Bot já está em execução, ignorando nova inicialização');
         return;
@@ -85,6 +89,7 @@ function setupSocketEvents(sock, saveCreds) {
         
         // Exibir QR Code usando qrcode-terminal
         if (qr && !qrShown) {
+            lastQR = qr;
             qrShown = true;
             showQRCode(qr);
         }
@@ -172,6 +177,14 @@ function handleConnectionOpen(sock) {
     console.log(`👤 Logado como: ${sock.user?.name || 'Usuário'}`);
     
     log.info('✅ Conectado ao WhatsApp');
+
+    lastQR = null; 
+    connectionInfo = {
+        name: sock.user?.name || 'Usuário',
+        id: sock.user?.id || null,
+        phone: sock.user?.id?.split(':')[0] || null,
+        connectedAt: new Date().toISOString()
+    };
     
     // Limpa timeout de reconexão anterior se existir
     if (reconnectTimeout) {
@@ -195,6 +208,11 @@ function handleConnectionClose(lastDisconnect) {
     
     // Marca que não está mais rodando
     isRunning = false;
+
+    if (manualStop) {
+        log.info('Bot parado manualmente. Reconexão cancelada.');
+        return;
+    }
     
     // Verificar se precisa reconectar
     const shouldReconnect = 
@@ -230,6 +248,8 @@ function scheduleRestart(delay) {
 async function handleShutdown() {
     console.log('\n\n👋 Encerrando bot...');
     log.info('Encerrando bot...');
+
+    connectionInfo = null;
     
     // Limpa timeout de reconexão
     if (reconnectTimeout) {
@@ -239,13 +259,33 @@ async function handleShutdown() {
     
     // Encerra socket se existir
     if (sock) {
-        await sock.end();
+        await sock.end();        
         sock = null;
     }
+    scheduler = null
+    
     
     isRunning = false;
-    process.exit(0);
+    // process.exit(1);
+
 }
+
+export function getStatus() {
+    return {
+        isRunning,
+        qr: lastQR,
+        connection: connectionInfo
+    };
+}
+
+export async function stopBot() {
+    manualStop = true;
+    handleShutdown();
+}
+    
+
+
+
 
 // ==================== INICIAR O BOT ====================
 console.log(`
@@ -254,8 +294,8 @@ console.log(`
 ╚══════════════════════════════════════════════╝
 `);
 
-startBot().catch(error => {
-    console.error('❌ ERRO FATAL AO INICIAR BOT:', error.message);
-    log.error('Erro fatal ao iniciar bot:', error);
-    process.exit(1);
-});
+// startBot().catch(error => {
+//     console.error('❌ ERRO FATAL AO INICIAR BOT:', error.message);
+//     log.error('Erro fatal ao iniciar bot:', error);
+//     process.exit(1);
+// });

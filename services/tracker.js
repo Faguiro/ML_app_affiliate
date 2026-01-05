@@ -53,6 +53,8 @@ export class LinkTracker {
             const validLinks = links.filter(link => this.isRegisteredDomain(link.domain));
             if (validLinks.length === 0) return 0;
 
+            console.log(JSON.stringify(msg, null, 2)); 
+
             // Obter informações do grupo
             let groupName = 'Desconhecido';
             try {
@@ -108,21 +110,25 @@ export class LinkTracker {
                     continue;
                 }
 
+                let copy =  JSON.stringify(msg.message?.extendedTextMessage)
+
                 // Inserir link
                 db.run(
                     `INSERT INTO tracked_links 
-                 (original_url, domain, group_jid, sender_name, status)
-                 VALUES (?, ?, ?, ?, 'pending')`,
+                 (original_url, domain, group_jid, sender_name, status, copy_text)
+                 VALUES (?, ?, ?, ?, 'pending', ?)`,
                     [
                         link.url,
                         link.domain,
                         jid,
-                        msg.pushName || 'Desconhecido'
+                        msg.pushName || 'Desconhecido',
+                        copy || ''
                     ]
                 );
 
                 savedCount++;
                 log.info(`✅ Link rastreado: ${link.domain} em ${groupName}`);
+                
             }
 
             return savedCount;

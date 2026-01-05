@@ -1,0 +1,635 @@
+<!-- control-panel.html - VERSÃO CORRIGIDA (sem fs) -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Controle do Bot WhatsApp</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .status { 
+            padding: 15px; 
+            margin: 15px 0; 
+            border-radius: 10px; 
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status i {
+            font-size: 1.3em;
+        }
+        
+        .online { 
+            background: #d4ffd4; 
+            color: #2e7d32;
+            border-left: 5px solid #2e7d32;
+        }
+        
+        .offline { 
+            background: #ffd4d4; 
+            color: #c62828;
+            border-left: 5px solid #c62828;
+        }
+        
+        .waiting { 
+            background: #fff3cd; 
+            color: #856404;
+            border-left: 5px solid #ffc107;
+        }
+        
+        button { 
+            margin: 8px; 
+            padding: 12px 24px; 
+            cursor: pointer; 
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-start { background: #28a745; color: white; }
+        .btn-stop { background: #dc3545; color: white; }
+        .btn-qr { background: #ffc107; color: #212529; }
+        .btn-clear { background: #6c757d; color: white; }
+        .btn-reconnect { background: #17a2b8; color: white; }
+        .btn-log { background: #6f42c1; color: white; }
+        
+        .qr-container {
+            text-align: center;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            background: #f8f9fa;
+        }
+        
+        #qrCode {
+            max-width: 256px;
+            max-height: 256px;
+            margin: 20px auto;
+            display: block;
+        }
+        
+        .user-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .logs-container {
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #1e1e1e; 
+            border-radius: 10px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .dot-online { background: #28a745; }
+        .dot-offline { background: #dc3545; }
+        .dot-connecting { background: #ffc107; animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            button {
+                width: calc(100% - 16px);
+                justify-content: center;
+            }
+            
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fab fa-whatsapp"></i> Controle do Bot WhatsApp</h1>
+            <p>Gerencie seu bot de afiliados remotamente</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3><i class="fas fa-robot"></i> Status do Bot</h3>
+                <div id="statusText" class="stat-value">Offline</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3><i class="fas fa-user"></i> Usuário</h3>
+                <div id="userText" class="stat-value">Desconectado</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3><i class="fas fa-clock"></i> Última Atualização</h3>
+                <div id="lastUpdate" class="stat-value">--:--:--</div>
+            </div>
+        </div>
+        
+        <div id="status" class="status offline">
+            <i class="fas fa-circle"></i>
+            <span><strong>Status:</strong> Desconectado</span>
+        </div>
+        
+        <div class="connection-status">
+            <span class="status-dot dot-offline" id="connectionDot"></span>
+            <span id="connectionText">Desconectado do servidor</span>
+        </div>
+        
+        <div class="user-info" id="userInfo" style="display: none;">
+            <h3><i class="fas fa-info-circle"></i> Informações do Usuário</h3>
+            <div id="userDetails"></div>
+        </div>
+        
+        <div class="qr-container" id="qrContainer" style="display: none;">
+            <h3><i class="fas fa-qrcode"></i> QR Code para Autenticação</h3>
+            <p>Escaneie este código com o WhatsApp para conectar</p>
+            <img id="qrCode" src="" alt="QR Code">
+            <p><small><i class="fas fa-clock"></i> Expira em aproximadamente 2 minutos</small></p>
+            
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left;">
+                <h4><i class="fas fa-mobile-alt"></i> Instruções:</h4>
+                <ol style="margin-left: 20px;">
+                    <li>Abra o WhatsApp no celular</li>
+                    <li>Toque em ⋮ (três pontos) → "Aparelhos conectados"</li>
+                    <li>Toque em "Conectar um aparelho"</li>
+                    <li>Aponte a câmera para o QR Code acima</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <button class="btn-start" onclick="controlBot('start')" id="startBtn">
+                <i class="fas fa-play"></i> ▶️ Ligar Bot
+            </button>
+            <button class="btn-stop" onclick="controlBot('stop')" id="stopBtn" disabled>
+                <i class="fas fa-stop"></i> ⏹️ Desligar Bot
+            </button>
+            <button class="btn-qr" onclick="generateQR()">
+                <i class="fas fa-qrcode"></i> 📱 Novo QR Code
+            </button>
+            <button class="btn-clear" onclick="deleteSessions()">
+                <i class="fas fa-trash"></i> 🗑️ Apagar Sessões
+            </button>
+            <button class="btn-reconnect" onclick="forceReconnect()">
+                <i class="fas fa-sync-alt"></i> 🔄 Reconectar
+            </button>
+            <button class="btn-log" onclick="loadLogs()">
+                <i class="fas fa-history"></i> 📝 Atualizar Logs
+            </button>
+        </div>
+        
+        <div id="logs" class="logs-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3><i class="fas fa-terminal"></i> Logs do Sistema</h3>
+                <button onclick="clearLogs()" style="padding: 5px 10px; font-size: 0.8em;">
+                    <i class="fas fa-trash"></i> Limpar
+                </button>
+            </div>
+            <div id="logsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        const TOKEN = 'seu-token-secreto';
+        let ws = null;
+        let isConnected = false;
+        
+        // ==================== WEBSOCKET ====================
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:8080');
+                
+                ws.onopen = () => {
+                    console.log('✅ Conectado ao servidor WebSocket');
+                    isConnected = true;
+                    updateConnectionStatus(true);
+                    addLog('✅ Conectado ao servidor em tempo real');
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('Erro ao processar mensagem WebSocket:', error);
+                        addLog('❌ Erro ao processar mensagem do servidor');
+                    }
+                };
+                
+                ws.onclose = () => {
+                    console.log('❌ Desconectado do WebSocket');
+                    isConnected = false;
+                    updateConnectionStatus(false);
+                    addLog('⚠️ Conexão perdida, tentando reconectar...');
+                    
+                    // Tentar reconectar após 3 segundos
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    addLog('❌ Erro na conexão WebSocket');
+                };
+            } catch (error) {
+                console.error('Erro ao conectar WebSocket:', error);
+                addLog('❌ Não foi possível conectar ao servidor');
+            }
+        }
+        
+        function handleWebSocketMessage(data) {
+            switch(data.type) {
+                case 'STATUS_UPDATE':
+                    updateStatus(data.data);
+                    break;
+                    
+                default:
+                    console.log('Mensagem WebSocket desconhecida:', data);
+            }
+        }
+        
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                dot.className = 'status-dot dot-online';
+                text.textContent = 'Conectado ao servidor em tempo real';
+            } else {
+                dot.className = 'status-dot dot-connecting';
+                text.textContent = 'Conectando ao servidor...';
+            }
+        }
+        
+        // ==================== FUNÇÕES DE CONTROLE ====================
+        async function fetchAPI(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {
+                    'x-api-token': TOKEN,
+                    'Content-Type': 'application/json'
+                }
+            };
+            
+            if (body) options.body = JSON.stringify(body);
+            
+            try {
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error(`Erro na API ${endpoint}:`, error);
+                addLog(`❌ Erro na comunicação: ${error.message}`);
+                throw error;
+            }
+        }
+        
+        async function updateStatusFromAPI() {
+            try {
+                const data = await fetchAPI('/status');
+                updateStatus(data);
+            } catch (error) {
+                console.error('Erro ao buscar status:', error);
+            }
+        }
+        
+        function updateStatus(data) {
+            const statusDiv = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const userText = document.getElementById('userText');
+            const userInfo = document.getElementById('userInfo');
+            const userDetails = document.getElementById('userDetails');
+            const lastUpdate = document.getElementById('lastUpdate');
+            
+            // Determinar classe de status
+            let statusClass = 'offline';
+            let statusIcon = 'fas fa-times-circle';
+            let displayStatus = 'Desconectado';
+            
+            if (data.status === 'online') {
+                statusClass = 'online';
+                statusIcon = 'fas fa-check-circle';
+                displayStatus = 'Online';
+            } else if (data.status === 'waiting_qr' || data.qrCode) {
+                statusClass = 'waiting';
+                statusIcon = 'fas fa-hourglass-half';
+                displayStatus = 'Aguardando QR';
+            }
+            
+            // Atualizar status principal
+            statusDiv.className = `status ${statusClass}`;
+            statusDiv.innerHTML = `
+                <i class="${statusIcon}"></i>
+                <span><strong>Status:</strong> ${displayStatus.toUpperCase()}</span>
+            `;
+            
+            statusText.textContent = displayStatus;
+            
+            // Atualizar informações do usuário
+            if (data.user && data.user.name) {
+                userText.textContent = data.user.name || 'Usuário';
+                userInfo.style.display = 'block';
+                
+                userDetails.innerHTML = `
+                    <p><strong>ID:</strong> ${data.user.id || 'N/A'}</p>
+                    <p><strong>Nome:</strong> ${data.user.name || 'Não definido'}</p>
+                    <p><strong>Telefone:</strong> ${data.user.phone || 'N/A'}</p>
+                `;
+            } else {
+                userText.textContent = 'Desconectado';
+                userInfo.style.display = 'none';
+            }
+            
+            // Atualizar hora
+            if (data.timestamp) {
+                const time = new Date(data.timestamp).toLocaleTimeString();
+                lastUpdate.textContent = time;
+            }
+            
+            // Mostrar/ocultar QR Code
+            const qrContainer = document.getElementById('qrContainer');
+            if (data.qrCode) {
+                qrContainer.style.display = 'block';
+                document.getElementById('qrCode').src = data.qrCode;
+            } else {
+                qrContainer.style.display = 'none';
+            }
+            
+            // Atualizar botões
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            if (data.status === 'online' || data.status === 'waiting_qr') {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+        
+        async function controlBot(action) {
+            try {
+                addLog(`🔄 Executando: ${action}`);
+                const result = await fetchAPI('/control', 'POST', { action });
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`);
+                    alert(result.message);
+                    // Atualizar status após 1 segundo
+                    setTimeout(updateStatusFromAPI, 1000);
+                } else {
+                    addLog(`❌ Erro: ${result.error}`);
+                    alert(`Erro: ${result.error}`);
+                }
+            } catch (error) {
+                addLog(`❌ Falha na operação: ${error.message}`);
+                alert(`Falha: ${error.message}`);
+            }
+        }
+        
+        async function generateQR() {
+            if (confirm('Isso irá gerar um novo QR Code. Deseja continuar?')) {
+                try {
+                    addLog('📱 Solicitando novo QR Code...');
+                    const result = await fetchAPI('/qrcode', 'POST');
+                    
+                    if (result.success) {
+                        addLog(`✅ ${result.message}`);
+                        alert(result.message || 'QR Code solicitado com sucesso');
+                        // Atualizar status após 2 segundos
+                        setTimeout(updateStatusFromAPI, 2000);
+                    } else {
+                        addLog(`❌ ${result.error}`);
+                        alert(`Erro: ${result.error}`);
+                    }
+                } catch (error) {
+                    addLog(`❌ Falha ao gerar QR: ${error.message}`);
+                    alert(`Falha: ${error.message}`);
+                }
+            }
+        }
+        
+        async function deleteSessions() {
+            if (confirm('⚠️ ATENÇÃO: Isso apagará todas as sessões salvas e desconectará o bot. Continuar?')) {
+                try {
+                    addLog('🗑️ Apagando sessões...');
+                    const result = await fetchAPI('/sessions', 'DELETE');
+                    
+                    if (result.success) {
+                        addLog(`✅ ${result.message}`);
+                        alert(result.message);
+                        setTimeout(updateStatusFromAPI, 1000);
+                    } else {
+                        addLog(`❌ ${result.error}`);
+                        alert(`Erro: ${result.error}`);
+                    }
+                } catch (error) {
+                    addLog(`❌ Falha ao apagar sessões: ${error.message}`);
+                    alert(`Falha: ${error.message}`);
+                }
+            }
+        }
+        
+        async function forceReconnect() {
+            try {
+                addLog('🔄 Forçando reconexão...');
+                const result = await fetchAPI('/reconnect', 'POST');
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`);
+                    alert(result.message);
+                } else {
+                    addLog(`❌ ${result.error}`);
+                    alert(`Erro: ${result.error}`);
+                }
+            } catch (error) {
+                addLog(`❌ Falha na reconexão: ${error.message}`);
+                alert(`Falha: ${error.message}`);
+            }
+        }
+        
+        // ==================== LOGS ====================
+        async function loadLogs() {
+            try {
+                addLog('📝 Carregando logs...');
+                const data = await fetchAPI('/logs?lines=30');
+                
+                if (data.success) {
+                    const logsDiv = document.getElementById('logsContent');
+                    
+                    logsDiv.innerHTML = data.logs.map(log => 
+                        `<div class="log-entry">${log}</div>`
+                    ).join('');
+                    
+                    // Rolagem automática para o final
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                    
+                    addLog('✅ Logs atualizados');
+                } else {
+                    addLog(`❌ Erro nos logs: ${data.error}`);
+                }
+            } catch (error) {
+                addLog(`❌ Erro ao carregar logs: ${error.message}`);
+            }
+        }
+        
+        function addLog(message) {
+            const logsDiv = document.getElementById('logsContent');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span style="color: #888">[${timestamp}]</span> ${message}`;
+            
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+        
+        function clearLogs() {
+            if (confirm('Limpar todos os logs da tela?')) {
+                document.getElementById('logsContent').innerHTML = '';
+                addLog('🧹 Logs limpos da tela');
+            }
+        }
+        
+        // ==================== INICIALIZAÇÃO ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Conectar WebSocket
+            connectWebSocket();
+            
+            // Carregar status inicial
+            updateStatusFromAPI();
+            
+            // Carregar logs após 1 segundo
+            setTimeout(loadLogs, 1000);
+            
+            // Atualizar status a cada 10 segundos (fallback)
+            setInterval(updateStatusFromAPI, 10000);
+            
+            // Atualizar logs a cada 30 segundos
+            setInterval(loadLogs, 30000);
+            
+            addLog('🚀 Sistema de controle inicializado');
+        });
+        
+        // Lidar com fechamento da página
+        window.addEventListener('beforeunload', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>

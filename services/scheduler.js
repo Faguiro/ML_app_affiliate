@@ -15,14 +15,16 @@ export class Scheduler {
     start() {
         // Processar links pendentes
         setInterval(() => this.processLinks(), config.processInterval);
+        log.info('intervalo do processo:', config.processInterval);
 
         // Enviar links processados
         setInterval(() => this.sendLinks(), config.sendInterval);
+        log.info('intervalo do envio:', config.sendInterval);
 
         // Reset diário à meia-noite
         this.scheduleDailyReset();
 
-        log.info('Agendador iniciado');
+        // log.info('Agendador iniciado');
     }
 
     async processLinks() {
@@ -31,11 +33,12 @@ export class Scheduler {
 
         try {
             log.info('Processando links pendentes...');
-            const pendingLinks = LinkTracker.getPendingLinks(10);
+            const pendingLinks = await LinkTracker.getPendingLinks(10);
 
             for (const link of pendingLinks) {
                 try {
-                    const result = await AffiliateService.generateAffiliateLink(link.original_url);
+                    const result = await AffiliateService.generateAffiliateLink(link);
+                    log.info(`Link ${link.id} processado:`, result);
 
                     if (result.success) {
                         LinkTracker.updateLinkStatus(
@@ -45,10 +48,13 @@ export class Scheduler {
                             result.metadata
                         );
                         log.info(`Link ${link.id} processado com sucesso`);
+                        this.sendLinks();
                     } else {
                         LinkTracker.updateLinkStatus(link.id, 'failed');
                         log.error(`Link ${link.id} falhou: ${result.error}`);
                     }
+
+
 
                     // Pequena pausa para evitar rate limit
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -103,6 +109,7 @@ export class Scheduler {
 
                             const payload = this.createMessagePayload(link);
 
+
                             await this.sock.sendMessage(group.group_jid, payload);
 
                             // Registrar envio
@@ -114,8 +121,6 @@ export class Scheduler {
 
                             // Incrementar contador
                             db.incrementSentCount(group.group_jid);
-
-
 
                             console.log(`  ✅ Enviado com sucesso para ${group.group_name}`);
 
@@ -144,70 +149,95 @@ export class Scheduler {
                         }
                     }
                 }
+                // Pequena pausa entre links
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+        } catch (error) {
+            log.error('Erro ao enviar links', error);
 
         } finally {
             this.sending = false;
         }
-    }
+    }   
 
     createMessagePayload(link) {
-        const metadata = link.metadata ? JSON.parse(link.metadata) : {};
-        const caption = this.createMessage(link);
-
-        if (metadata.product_image) {
-            console.log('  🖼️  Enviando com imagem:', metadata.product_image);
-            return {
-                image: { url: metadata.product_image },
-                caption: caption
-            };
-        }
-
-        return { text: caption };
-    }
-
-
-    createMessage(link) {
         try {
             const metadata = link.metadata ? JSON.parse(link.metadata) : {};
+            const caption = this.createMessage(link);
 
-            let message = `🛍️ *RECOMENDAÇÃO DO GRUPO*\n\n`;
-
-            // Título do produto
-            if (metadata.product_title) {
-                message += `*${metadata.product_title}*\n\n`;
+            // Verificar se há imagem nos metadados da IA
+            if (metadata.product_image && metadata.product_image.startsWith('data:image')) {
+                console.log('  🖼️  Enviando com imagem do copy_text (base64)');
+                return {
+                    image: { url: metadata.product_image },
+                    caption: caption
+                };
             }
+
+            // Verificar se há imagem URL
+            if (metadata.product_image && metadata.product_image.startsWith('http')) {
+                console.log('  🖼️  Enviando com imagem URL:', metadata.product_image);
+                return {
+                    image: { url: metadata.product_image },
+                    caption: caption
+                };
+            }
+
+            console.log('  📝 Enviando como mensagem de texto');
+            return { text: caption };
+
+        } catch (error) {
+            console.error('Erro ao criar payload:', error);
+            return { text: this.createMessage(link) };
+        }
+    }
+
+    createMessage(link) {
+        console.log('  📝 Criando mensagem para o link:', JSON.stringify(link, null, 2));
+
+        try {
+            const metadata = link.metadata ? JSON.parse(link.metadata) : {};
+            const copyText = link.copy_text ? JSON.parse(link.copy_text) : {};
+
+            let message = ``;
+
+            // Título do produto (prioridade: metadata > copy_text)
+            const title = metadata.product_title || copyText.title || 'Produto Recomendado';
+            message += `*${title}*\n\n`;
 
             // Link afiliado (sempre)
             message += `🔗 ${link.affiliate_link}\n\n`;
 
-            // Prioridade: Descrição da IA > Texto sugerido > Fallback
+            // Prioridade: Descrição da IA > Fallback
             if (metadata.ai_description) {
                 message += `${metadata.ai_description}\n\n`;
-            } else if (metadata.suggested_text) {
-                // Remove o link se estiver repetido no suggested_text
-                let cleanText = metadata.suggested_text;
-                if (link.affiliate_link && cleanText.includes(link.affiliate_link)) {
-                    cleanText = cleanText.replace(link.affiliate_link, '').trim();
-                }
-                message += `${cleanText}\n\n`;
+            } else if (copyText.description) {
+                // Usar um trecho da descrição original se não houver IA
+                const shortDesc = copyText.description.substring(0, 150) + '...';
+                message += `${shortDesc}\n\n`;
             } else {
                 message += `✨ Recomendação especial dos membros do grupo!\n\n`;
             }
 
-            // Informações adicionais
-            if (metadata.price) {
+            // Informações de preço (extraídas do texto original)
+            if (copyText.text) {
+                const priceMatch = copyText.text.match(/\*💸Por 🔥: R\$\s*([\d,.-]+(?:\s*-\s*R\$\s*[\d,.]+)?)\*/);
+                if (priceMatch) {
+                    message += `💰 Preço: R$ ${priceMatch[1]}\n`;
+                }
+            } else if (metadata.price) {
                 message += `💰 ${metadata.price}\n`;
             }
 
             // Rodapé
-            message += `✅ Recomendação verificada\n`;
-            message += `🚚 Entrega para todo Brasil\n`;
             message += `🛡️ Compra 100% segura`;
 
             return message;
 
         } catch (error) {
+            log.error('Erro ao criar mensagem:', error);
             return `🛍️ Recomendação especial:\n\n${link.affiliate_link}\n\nRecomendado pelo grupo ✅`;
         }
     }

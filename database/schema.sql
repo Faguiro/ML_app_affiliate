@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tracked_links (
     domain TEXT NOT NULL,
     group_jid TEXT NOT NULL,
     sender_name TEXT,
+    copy_text TEXT,
     status TEXT DEFAULT 'pending',
     affiliate_link TEXT UNIQUE,  
     metadata TEXT,
