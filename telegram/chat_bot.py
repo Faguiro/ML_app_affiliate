@@ -183,6 +183,12 @@ class ChatBot:
             bool: True se enviado com sucesso
         """
         try:
+            try:
+                if isinstance(chat_id, str) and (chat_id.startswith('-') or chat_id.isdigit()):
+                    chat_id = int(chat_id)
+            except ValueError:
+                pass # Se não for conversível (ex: @username), mantemos como string
+            # --------------------------------------------
             print(f"\n📤 Enviando mensagem para {chat_id}...")
             
             if as_bot and not self.telegram.bot_client:

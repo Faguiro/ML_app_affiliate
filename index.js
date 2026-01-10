@@ -8,6 +8,7 @@ import { log } from './core/logger.js';
 import { Scheduler } from './services/scheduler.js';
 import { LinkTracker } from './services/tracker.js';
 import { handleAdminCommand } from './commands/admin.js';
+import { TrackedGroupSyncService } from './services/trackedGroupSync.js';
 
 // ==================== VARIÁVEIS DE CONTROLE GLOBAIS ====================
 let sock = null;
@@ -47,6 +48,9 @@ export async function startBot() {
         // ==================== CONFIGURAR EVENTOS DO SOCKET ====================
         setupSocketEvents(sock, saveCreds);
         
+	const groupSync = new TrackedGroupSyncService(sock);
+        await groupSync.sync();
+
     } catch (error) {
         log.error('❌ Erro na inicialização do bot:', error);
         isRunning = false;

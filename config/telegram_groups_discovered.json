@@ -1,11 +1,11 @@
 {
   "groups": [
     {
-      "id": -1003528813782,
-      "name": "FBot",
+      "id": -5195270518,
+      "name": "Grupo teste de rastreio",
       "active": true,
       "tags": [
-        "supergrupo",
+        "grupo",
         "geral"
       ]
     }
