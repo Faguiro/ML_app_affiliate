@@ -1,18 +1,45 @@
-// services/affiliate.js
+// services/affiliate.js - REFATORADO COM NORMALIZAÇÃO DE RESPOSTAS
 import { config } from '../core/config.js';
 import { log } from '../core/logger.js';
 import { ProductDescriptionAI } from './product-ai.js';
 
+/**
+ * Estados possíveis da API (sincronizado com Python)
+ */
+const ProcessStatus = {
+    PENDING: 'pending',
+    PROCESSING: 'processing',
+    COMPLETED: 'completed',
+    FAILED_TEMPORARY: 'failed_temporary',
+    FAILED_PERMANENT: 'failed_permanent',
+    FAILED_AUTH: 'failed_auth',
+    FAILED_CAPTCHA: 'failed_captcha',
+    FAILED_NETWORK: 'failed_network'
+};
+
+/**
+ * Tipos de erro (sincronizado com Python)
+ */
+const ErrorType = {
+    AUTH_EXPIRED: 'auth_expired',
+    CAPTCHA_REQUIRED: 'captcha_required',
+    NETWORK_TIMEOUT: 'network_timeout',
+    INVALID_URL: 'invalid_url',
+    RATE_LIMIT: 'rate_limit',
+    UNKNOWN: 'unknown'
+};
+
 export class AffiliateService {
+    /**
+     * Gera link de afiliado com lógica inteligente de retry
+     */
     static async generateAffiliateLink(link) {
         const productUrl = typeof link === 'string' ? link : link.original_url;
         const maxRetries = config.maxRetries;
 
-        console.log(`Conteudo de link na função: \n${JSON.stringify(link, null, 2)}\n`);
-
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                log.info(`Tentativa ${attempt}/${maxRetries} para: ${productUrl}`);
+                log.info(`Tentativa ${attempt}/${maxRetries}`);
 
                 // Etapa 1: Iniciar processamento
                 const processId = await this.startProcessing(productUrl);
@@ -20,40 +47,104 @@ export class AffiliateService {
                     throw new Error('Falha ao iniciar processamento');
                 }
                 console.log('📦 Process ID recebido:', processId);
-                // pequena pausa antes de aguardar conclusão
+                
+                // Pausa antes de verificar conclusão
                 await new Promise(resolve => setTimeout(resolve, 5000));
 
                 // Etapa 2: Aguardar conclusão
-                const result = await this.waitForCompletion(processId);
+                const apiResult = await this.waitForCompletion(processId);
+                console.log('📦 Resultado da API:', JSON.stringify(apiResult, null, 2));
 
-                // DEBUG: Verifique o que está vindo
-                console.log('📦 Resultado do waitForCompletion:', JSON.stringify(result, null, 2));
+                // ========== VERIFICAR STATUS DA RESPOSTA ==========
+                const status = apiResult.status;
+                const retryAllowed = apiResult.retry_allowed ?? true; // Default true se não especificado
 
-                if (result && result.affiliate_link) {
-                    // Extrair dados do copy_text se a API não forneceu dados completos
-                    const extractedData = this.extractDataFromCopyText(link.copy_text);
+                // ========== TRATAR ERROS PERMANENTES ==========
+                if (status === ProcessStatus.FAILED_AUTH) {
+                    log.error('❌ AUTENTICAÇÃO EXPIRADA - Não tentar novamente');
+                    log.error('Mensagem:', apiResult.error?.user_message);
+                    log.error('Ação necessária:', apiResult.requires_action);
                     
-                    // Inicializar IA se disponível
-                    const aiEnabled = ProductDescriptionAI.init();
+                    return {
+                        success: false,
+                        error: apiResult.error?.user_message || 'Sessão expirada',
+                        status: 'failed_auth',
+                        requires_action: apiResult.requires_action,
+                        retry_allowed: false
+                    };
+                }
 
+                if (status === ProcessStatus.FAILED_CAPTCHA) {
+                    log.error('❌ CAPTCHA DETECTADO - Intervenção manual necessária');
+                    log.error('Mensagem:', apiResult.error?.user_message);
+                    
+                    return {
+                        success: false,
+                        error: apiResult.error?.user_message || 'CAPTCHA detectado',
+                        status: 'failed_captcha',
+                        requires_action: 'manual_intervention',
+                        retry_allowed: false
+                    };
+                }
+
+                if (status === ProcessStatus.FAILED_PERMANENT) {
+                    log.error('❌ ERRO PERMANENTE - Não tentar novamente');
+                    log.error('Tipo:', apiResult.error?.type);
+                    log.error('Mensagem:', apiResult.error?.user_message);
+                    
+                    return {
+                        success: false,
+                        error: apiResult.error?.user_message || 'Erro permanente',
+                        status: 'failed_permanent',
+                        error_type: apiResult.error?.type,
+                        retry_allowed: false
+                    };
+                }
+
+                // ========== VERIFICAR SE PODE TENTAR NOVAMENTE ==========
+                if (!retryAllowed) {
+                    log.error('❌ Erro sem permissão para retry');
+                    return {
+                        success: false,
+                        error: apiResult.error?.user_message || 'Processamento falhou',
+                        status: status,
+                        retry_allowed: false
+                    };
+                }
+
+                // ========== PROCESSAR SUCESSO ==========
+                if (apiResult.success && apiResult.data?.affiliate_link) {
+                    log.info('✅ Link de afiliado gerado com sucesso!');
+                    
+                    // Extrair dados do WhatsApp
+                    const whatsappData = this.extractWhatsAppData(link.copy_text);
+
+                    // Montar metadata
                     let metadata = {
-                        product_title: result.product_title || extractedData.title || '',
-                        price: extractedData.price || result.price_current || '',
-                        price_original: extractedData.price_original || result.price_original || '',
-                        discount_percent: extractedData.discount_percent || result.discount_percent || '',
-                        product_image: extractedData.image || result.product_image || null,
-                        description: extractedData.description || ''
+                        // Dados da API
+                        product_title: apiResult.data.product_title || '',
+                        product_price: apiResult.data.product_price || null,
+                        price_original: apiResult.data.price_original || null,
+                        product_image: apiResult.data.product_image || null,
+                        
+                        // Dados do WhatsApp (sobrescreve se disponível)
+                        ...whatsappData,
+                        
+                        // Link de afiliado
+                        affiliate_link: apiResult.data.affiliate_link
                     };
 
-                    // Se IA disponível, aprimora a descrição usando os dados extraídos
-                    if (aiEnabled && (metadata.product_title || extractedData.description)) {
+                    // Tentar melhorar com IA
+                    if (ProductDescriptionAI.init()) {
                         try {
-                            const enhancedMetadata = await ProductDescriptionAI.enhanceAffiliateMessage(
+                            const aiDescription = await ProductDescriptionAI.generateProductDescription(
                                 metadata.product_title,
-                                metadata,
-                                extractedData.description // Passar descrição completa para a IA
+                                whatsappData.description || ''
                             );
-                            metadata = enhancedMetadata;
+                            
+                            if (aiDescription) {
+                                metadata.ai_description = aiDescription;
+                            }
                         } catch (error) {
                             log.warn('Não foi possível aprimorar com IA:', error.message);
                         }
@@ -61,72 +152,176 @@ export class AffiliateService {
 
                     return {
                         success: true,
-                        affiliate_link: result.affiliate_link,
-                        metadata: metadata
+                        affiliate_link: apiResult.data.affiliate_link,
+                        metadata: metadata,
+                        status: 'completed'
                     };
                 }
 
-            } catch (error) {
-                log.error(`Tentativa ${attempt} falhou:`, error.message);
+                // ========== ERRO TEMPORÁRIO - PODE TENTAR NOVAMENTE ==========
+                log.warn(`⚠️ Tentativa ${attempt} falhou (temporário)`);
 
+            } catch (error) {
+                log.error(`Tentativa ${attempt} falhou com exceção:`, error.message);
+
+                // Se chegou ao máximo de tentativas, retornar falha
                 if (attempt === maxRetries) {
                     return {
                         success: false,
-                        error: error.message
+                        error: error.message,
+                        status: 'failed_temporary',
+                        retry_allowed: false
                     };
                 }
 
+                // Backoff exponencial
                 await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
             }
         }
 
-        return { success: false, error: 'Máximo de tentativas atingido' };
+        return { 
+            success: false, 
+            error: 'Máximo de tentativas atingido',
+            status: 'failed_temporary',
+            retry_allowed: false
+        };
     }
 
-    // Novo método para extrair dados do copy_text
-    static extractDataFromCopyText(copyText) {
+    /**
+     * Extrai dados relevantes do WhatsApp
+     */
+    static extractWhatsAppData(copyTextStr) {
         try {
-            if (!copyText) return {};
-            
-            const data = JSON.parse(copyText);
+            if (!copyTextStr) return {};
+
+            const data = JSON.parse(copyTextStr);
             const extracted = {};
-            
-            // Extrair título
-            if (data.title && data.title != "Produto Shopee") {
-                extracted.title = data.title;
-            } else{
-                extracted.title = data.description?.split('-')[0] || '';
-            }
-            
-            // Extrair descrição
-            if (data.description) {
-                extracted.description = data.description;
-            }
-            
-            // Extrair preço do texto da mensagem
-            if (data.text) {
-                const priceMatch = data.text.match(/\*💸Por 🔥: R\$\s*([\d,.-]+(?:\s*-\s*R\$\s*[\d,.]+)?)\*/);
-                if (priceMatch) {
-                    extracted.price = `R$ ${priceMatch[1]}`;
+
+            // Título
+            if (data.title?.trim() && data.title !== "Produto Shopee") {
+                extracted.title = data.title.trim();
+            } else if (data.text) {
+                const firstLine = data.text.split('\n')[0]?.trim();
+                if (firstLine && firstLine.length > 10 && !firstLine.includes('http')) {
+                    extracted.title = firstLine;
                 }
             }
-            
-            // Extrair imagem em base64
-            if (data.jpegThumbnail) {
-                extracted.image = `data:image/jpeg;base64,${data.jpegThumbnail}`;
+
+            // Descrição
+            if (data.description?.trim()) {
+                extracted.description = data.description.trim();
             }
-            
-            console.log('📋 Dados extraídos do copy_text:', extracted);
+
+            // Preços
+            if (data.text) {
+                const priceData = this._extractPricesFromText(data.text);
+                if (priceData.price_from) extracted.price_from = priceData.price_from;
+                if (priceData.price_to) extracted.price_to = priceData.price_to;
+                if (priceData.coupon) extracted.coupon = priceData.coupon;
+            }
+
+            // Imagem
+            if (data.jpegThumbnail && this._isValidBase64(data.jpegThumbnail)) {
+                extracted.image = `data:image/jpeg;base64,${data.jpegThumbnail}`;
+                console.log('✅ Imagem WhatsApp convertida para base64');
+            }
+
             return extracted;
-            
+
         } catch (error) {
-            console.error('Erro ao extrair dados do copy_text:', error);
+            console.error('Erro ao extrair dados do WhatsApp:', error);
             return {};
         }
     }
 
+    /**
+     * Extrai preços e cupom do texto do WhatsApp
+     */
+    static _extractPricesFromText(text) {
+        if (!text || typeof text !== 'string') return {};
+
+        const result = {};
+
+        try {
+            const normalized = text
+                .replace(/\n/g, ' ')
+                .replace(/\s+/g, ' ')
+                .toLowerCase();
+
+            // Padrões para preço DE
+            const dePatterns = [
+                /de\s*[:]?\s*r?\$?\s*([\d.,]+)/i,
+                /💰\s*de\s*[:]?\s*r?\$?\s*([\d.,]+)/i
+            ];
+
+            // Padrões para preço POR
+            const porPatterns = [
+                /por\s*[:]?\s*r?\$?\s*([\d.,]+)/i,
+                /🔥\s*por\s*[:]?\s*r?\$?\s*([\d.,]+)/i,
+                /apenas\s*[:]?\s*r?\$?\s*([\d.,]+)/i
+            ];
+
+            // Padrões para cupom
+            const couponPatterns = [
+                /cupom:\s*[:]?\s*([a-z0-9\-_]+)/i,
+                /código\s*[:]?\s*([a-z0-9\-_]+)/i,
+                /([A-Z0-9\-_]{4,})\s*\(cupom\)/i
+            ];
+
+            // Procurar preços
+            for (const pattern of dePatterns) {
+                const match = normalized.match(pattern);
+                if (match?.[1]) {
+                    result.price_from = `R$ ${match[1]}`;
+                    break;
+                }
+            }
+
+            for (const pattern of porPatterns) {
+                const match = normalized.match(pattern);
+                if (match?.[1]) {
+                    result.price_to = `R$ ${match[1]}`;
+                    break;
+                }
+            }
+
+            // Procurar cupom
+            for (const pattern of couponPatterns) {
+                const match = normalized.match(pattern);
+                if (match?.[1]) {
+                    result.coupon = match[1].toUpperCase();
+                    break;
+                }
+            }
+
+        } catch (error) {
+            console.error('Erro ao extrair preços:', error);
+        }
+
+        return result;
+    }
+
+    /**
+     * Valida se uma string é base64 válida
+     */
+    static _isValidBase64(str) {
+        if (!str || typeof str !== 'string') return false;
+        
+        return (
+            str.startsWith('/9j/') ||
+            str.startsWith('iVBORw') ||
+            (str.length > 100 && !str.includes(',') && !str.includes(' '))
+        );
+    }
+
+    // ================ Métodos de integração com API externa =================
+    
+    /**
+     * Inicia o processamento na API
+     */
     static async startProcessing(productUrl) {
         try {
+            console.log(`Iniciando processamento em: ${config.apiUrl}/generate`);
             const response = await fetch(`${config.apiUrl}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -143,7 +338,10 @@ export class AffiliateService {
         }
     }
 
-    static async waitForCompletion(processId, maxChecks = 30) {
+    /**
+     * Aguarda conclusão do processamento com interpretação inteligente de status
+     */
+    static async waitForCompletion(processId, maxChecks = 10) {
         for (let check = 1; check <= maxChecks; check++) {
             try {
                 const response = await fetch(`${config.apiUrl}/check/${processId}`, {
@@ -151,47 +349,65 @@ export class AffiliateService {
                 });
 
                 const apiResponse = await response.json();
-                console.log(`Check ${check}:`, JSON.stringify(apiResponse));
+                console.log(`Check ${check}:`, JSON.stringify(apiResponse, null, 2));
+                
+                // ========== INTERPRETAR STATUS ==========
+                const status = apiResponse.status;
+                
+                // Status finais (não continuar checking)
+                const finalStatuses = [
+                    ProcessStatus.COMPLETED,
+                    ProcessStatus.FAILED_AUTH,
+                    ProcessStatus.FAILED_CAPTCHA,
+                    ProcessStatus.FAILED_PERMANENT,
+                ];
 
-                if (apiResponse.status === 'completed') {
-                    // Dados podem estar em apiResponse.data ou diretamente em apiResponse
-                    const data = apiResponse.data || apiResponse;
-
-                    const affiliateLink = data.affiliate_link ||
-                        data.link ||
-                        data.Link;
-
-                    if (affiliateLink) {
-                        console.log(`✅ Link encontrado: ${affiliateLink}`);
-
-                        // Retorna objeto estruturado corretamente
-                        console.log('📦 Dados retornados:', JSON.stringify(data, null, 2));
-                        return {
-                            affiliate_link: affiliateLink,
-                            product_title: data.product_title || '',
-                            price: data.price || '',
-                            // suggested_text: data.suggested_text || '',
-                            product_image: data.product_image || null,
-                            price_current: data.price_current || null,
-                            price_original: data.price_original || null,
-                            discount_percent: data.discount_percent || null,
-                        };
-                    }
+                // Se status final OU retry_allowed = false, retornar imediatamente
+                if (finalStatuses.includes(status) || apiResponse.retry_allowed === false) {
+                    console.log(`✅ Status final detectado: ${status}`);
+                    return apiResponse;
                 }
 
-                if (apiResponse.status === 'failed' || apiResponse.status === 'error') {
-                    throw new Error(apiResponse.message || 'Processamento falhou');                    
+                // Se ainda está processando, continuar
+                if (status === ProcessStatus.PROCESSING || status === ProcessStatus.PENDING ) {
+                    console.log(`⏳ Ainda processando... (${status})`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    continue;
                 }
 
-                await new Promise(resolve => setTimeout(resolve, 50000));
+                // Verificação de sucesso explícito (fallback para APIs antigas)
+                if (apiResponse.success === true && apiResponse.data?.affiliate_link) {
+                    console.log(`✅ Link encontrado via success flag`);
+                    return apiResponse;
+                }
 
-            } catch (error) { 
+                // Se falhou explicitamente
+                if (apiResponse.success === false || status === "failed") {
+                    console.log(`❌ Falha detectada via success flag`);
+                    return apiResponse;
+                }
+
+                // Status desconhecido - continuar tentando
+                console.log(`⚠️ Status desconhecido: ${status}, continuando...`);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+            } catch (error) {
                 console.error(`Check ${check} falhou:`, error.message);
-                if (check === maxChecks) throw error;
-                throw error;
+                
+                // Se é o último check, lançar erro
+                if (check === maxChecks) {
+                    throw error;
+                }
+                
+                // Caso contrário, tentar novamente
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
+        
+        // Timeout
         throw new Error(`Timeout após ${maxChecks} verificações`);
     }
-
 }
+
+// Exportar constantes para uso em outros módulos
+export { ProcessStatus, ErrorType };

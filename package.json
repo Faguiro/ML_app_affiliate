@@ -2,10 +2,13 @@
   "name": "affiliate-bot",
   "version": "1.0.0",
   "type": "module",
+  "main": "server.js",
+  "author": "Faguiro",
+  "license": "MIT",
+
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js",
-    "setup": "node scripts/setup.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"   
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc.9",

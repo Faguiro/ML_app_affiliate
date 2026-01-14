@@ -1,119 +1,655 @@
 <!DOCTYPE html>
-<html lang="pt-br">
-
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8" />
-    <title>Controle do Bot</title>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot Control Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #25d366;
+            --primary-dark: #128c7e;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --success: #28a745;
+            --info: #17a2b8;
+            --dark: #1e1e1e;
+            --light: #f8f9fa;
+            --gradient: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+            --shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
         }
 
-        button {
-            margin-right: 10px;
-            padding: 10px 16px;
-            font-size: 14px;
-            cursor: pointer;
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
         }
 
-        .danger {
-            background: #a00;
-            color: #fff;
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
-        #qr {
-            margin-top: 20px;
-            max-width: 300px;
-            display: none;
+        .logo i {
+            font-size: 3em;
+            color: var(--primary);
         }
 
-        #status {
-            margin-top: 15px;
+        .logo h1 {
+            font-size: 2em;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: var(--light);
+            border-radius: 50px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .dot-online { background: var(--success); }
+        .dot-offline { background: var(--danger); }
+        .dot-connecting { background: var(--warning); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s;
+        }
+
+        .card:hover { transform: translateY(-5px); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--light);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            color: white;
+        }
+
+        .icon-primary { background: var(--gradient); }
+        .icon-success { background: var(--success); }
+        .icon-warning { background: var(--warning); }
+        .icon-info { background: var(--info); }
+
+        .stat-value {
+            font-size: 2.5em;
             font-weight: bold;
+            color: var(--primary-dark);
+            margin: 10px 0;
         }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .connection-info { display: grid; gap: 12px; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: var(--light);
+            border-radius: 8px;
+        }
+
+        .info-label { color: #666; font-weight: 500; }
+        .info-value { font-weight: 600; color: var(--primary-dark); }
+
+        .qr-section { text-align: center; padding: 20px; }
+
+        .qr-code-container {
+            background: var(--light);
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px dashed #ddd;
+            margin: 20px 0;
+        }
+
+        #qrImage {
+            max-width: 280px;
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn:hover { transform: translateY(-2px); }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-start { background: var(--gradient); color: white; }
+        .btn-stop { background: var(--danger); color: white; }
+        .btn-restart { background: var(--info); color: white; }
+        .btn-reset { background: var(--warning); color: var(--dark); }
+        .btn-secondary { background: #6c757d; color: white; }
+
+        .logs-container {
+            background: var(--dark);
+            border-radius: 15px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-header h3 {
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            color: #00ff00;
+            line-height: 1.6;
+        }
+
+        .log-entry .timestamp { color: #888; margin-right: 10px; }
+        .log-entry.error { color: #ff6b6b; }
+        .log-entry.warning { color: #ffd93d; }
+        .log-entry.success { color: #6bcf7f; }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-success { background: #d4ffd4; color: var(--success); }
+        .badge-danger { background: #ffd4d4; color: var(--danger); }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        @media (max-width: 768px) {
+            .header { flex-direction: column; text-align: center; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .control-grid { grid-template-columns: 1fr; }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 350px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
     </style>
 </head>
-
 <body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <i class="fab fa-whatsapp"></i>
+                <div>
+                    <h1>WhatsApp Bot Control</h1>
+                    <p style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                        Sistema de Gerenciamento Remoto
+                    </p>
+                </div>
+            </div>
+            <div class="header-status">
+                <span class="status-dot dot-offline" id="mainStatusDot"></span>
+                <span id="mainStatusText" style="font-weight: 600;">Offline</span>
+            </div>
+        </div>
 
-    <h2>Controle do Bot</h2>
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-primary"><i class="fas fa-robot"></i></div>
+                        Status do Bot
+                    </div>
+                </div>
+                <div class="stat-value" id="botState">STOPPED</div>
+                <div class="stat-label">Estado Atual</div>
+                <div id="stateDescription" style="margin-top: 10px; color: #666; font-size: 0.9em;"></div>
+            </div>
 
-    <button onclick="start()">Iniciar</button>
-    <button onclick="stop()">Parar</button>
-    <button class="danger" onclick="resetSession()">Apagar Sessão</button>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-success"><i class="fas fa-user"></i></div>
+                        Usuário Conectado
+                    </div>
+                </div>
+                <div class="stat-value" id="userName" style="font-size: 1.8em;">---</div>
+                <div class="stat-label">Nome</div>
+                <div id="userPhone" style="margin-top: 10px; color: #666; font-weight: 600;">
+                    <i class="fas fa-phone"></i> <span>---</span>
+                </div>
+            </div>
 
-    <p id="status">Status: --</p>
-    <div id="connectionInfo" style="margin-top:15px;"></div>
-    <img id="qr" />
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-warning"><i class="fas fa-qrcode"></i></div>
+                        QR Code
+                    </div>
+                </div>
+                <div class="stat-value" id="qrAttempts">0</div>
+                <div class="stat-label">Tentativas de Conexão</div>
+                <div id="qrStatus" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-info"><i class="fas fa-cog"></i></div>
+                        Features
+                    </div>
+                </div>
+                <div class="connection-info">
+                    <div class="info-row">
+                        <span class="info-label">Scheduler</span>
+                        <span class="info-value" id="schedulerStatus">
+                            <span class="badge badge-danger">Inativo</span>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Última Atualização</span>
+                        <span class="info-value" id="lastUpdate">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-primary"><i class="fas fa-plug"></i></div>
+                        Detalhes da Conexão
+                    </div>
+                </div>
+                <div class="connection-info" id="connectionDetails">
+                    <div class="empty-state">
+                        <i class="fas fa-plug-circle-xmark"></i>
+                        <p>Nenhuma conexão ativa</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon icon-warning"><i class="fas fa-qrcode"></i></div>
+                        Autenticação
+                    </div>
+                </div>
+                <div class="qr-section" id="qrSection">
+                    <div class="empty-state">
+                        <i class="fas fa-qrcode"></i>
+                        <p>Nenhum QR Code disponível</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <div class="card-icon icon-primary"><i class="fas fa-sliders"></i></div>
+                    Controles do Bot
+                </div>
+            </div>
+            <div class="control-grid">
+                <button class="btn btn-start" onclick="handleStart()" id="btnStart">
+                    <i class="fas fa-play"></i> Iniciar
+                </button>
+                <button class="btn btn-stop" onclick="handleStop()" id="btnStop" disabled>
+                    <i class="fas fa-stop"></i> Parar
+                </button>
+                <button class="btn btn-restart" onclick="handleRestart()" id="btnRestart">
+                    <i class="fas fa-sync-alt"></i> Reiniciar
+                </button>
+                <button class="btn btn-reset" onclick="handleReset()">
+                    <i class="fas fa-trash-restore"></i> Reset Sessão
+                </button>
+                <button class="btn btn-secondary" onclick="handleDeleteSession()">
+                    <i class="fas fa-trash"></i> Apagar Sessão
+                </button>
+                <button class="btn btn-secondary" onclick="updateStatus()">
+                    <i class="fas fa-rotate"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="logs-container">
+                <div class="log-header">
+                    <h3><i class="fas fa-terminal"></i> System Logs</h3>
+                    <button class="btn btn-secondary" style="padding: 5px 15px; font-size: 0.85em;" onclick="clearLogs()">
+                        <i class="fas fa-broom"></i> Limpar
+                    </button>
+                </div>
+                <div id="logsContent">
+                    <div class="log-entry success">
+                        <span class="timestamp">[--:--:--]</span>
+                        🚀 Dashboard inicializada
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        async function start() {
-            await fetch('/start', { method: 'POST' });
-            load();
+        const API_URL = 'http://localhost:3000';
+        let updateInterval = null;
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
 
-        async function stop() {
-            await fetch('/stop', { method: 'POST' });
-            load();
+        function addLog(message, type = 'info') {
+            const logsContent = document.getElementById('logsContent');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            logsContent.appendChild(entry);
+            logsContent.scrollTop = logsContent.scrollHeight;
         }
 
-        async function resetSession() {
-            const confirmReset = confirm(
-                'Isso irá apagar a sessão do WhatsApp.\n' +
-                'Use apenas se o QR não aparecer ou houver erro de login.\n\nDeseja continuar?'
-            );
-
-            if (!confirmReset) return;
-
-            const res = await fetch('/reset-session', { method: 'POST' });
-            const data = await res.json();
-
-            alert(data.message);
-            load();
-        }
-
-        async function load() {
-            const res = await fetch('/status');
-            const data = await res.json();
-
-            const statusEl = document.getElementById('status');
-            const qrEl = document.getElementById('qr');
-            const infoEl = document.getElementById('connectionInfo');
-
-            if (data.running) {
-                statusEl.innerText = 'Status: ONLINE';
-            } else {
-                statusEl.innerText = 'Status: OFFLINE';
+        function clearLogs() {
+            if (confirm('Limpar todos os logs?')) {
+                document.getElementById('logsContent').innerHTML = '';
+                addLog('🧹 Logs limpos', 'success');
             }
-
-            if (data.qr) {
-                qrEl.src = data.qr;
-                qrEl.style.display = 'block';
-            } else {
-                qrEl.style.display = 'none';
-            }
-
-            if (data.connection) {
-                infoEl.innerHTML = `
-        <strong>Conectado como:</strong><br>
-        Nome: ${data.connection.name}<br>
-        Número: ${data.connection.phone || '--'}<br>
-        Conectado em: ${new Date(data.connection.connectedAt).toLocaleString()}
-    `;
-            } else {
-                infoEl.innerHTML = '';
-            }
-
         }
 
-        setInterval(load, 2000);
-        load();
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            const options = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) options.body = JSON.stringify(body);
+            
+            try {
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Erro na requisição');
+                return data;
+            } catch (error) {
+                addLog(`❌ Erro na API: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        async function updateStatus() {
+            try {
+                const data = await apiCall('/status');
+                
+                const statusMap = {
+                    'STOPPED': { color: 'dot-offline', text: 'Parado', desc: 'Bot está offline' },
+                    'STARTING': { color: 'dot-connecting', text: 'Iniciando', desc: 'Preparando...' },
+                    'CONNECTING': { color: 'dot-connecting', text: 'Conectando', desc: 'Aguardando QR' },
+                    'CONNECTED': { color: 'dot-online', text: 'Conectado', desc: 'Bot operacional' },
+                    'STOPPING': { color: 'dot-connecting', text: 'Parando', desc: 'Finalizando...' },
+                    'ERROR': { color: 'dot-offline', text: 'Erro', desc: 'Verifique os logs' }
+                };
+                
+                const state = statusMap[data.state] || statusMap['STOPPED'];
+                document.getElementById('mainStatusDot').className = `status-dot ${state.color}`;
+                document.getElementById('mainStatusText').textContent = state.text;
+                document.getElementById('botState').textContent = data.state;
+                document.getElementById('stateDescription').textContent = state.desc;
+                
+                if (data.connection) {
+                    document.getElementById('userName').textContent = data.connection.name || '---';
+                    document.getElementById('userPhone').innerHTML = `<i class="fas fa-phone"></i> ${data.connection.phone || '---'}`;
+                    
+                    const connectedAt = new Date(data.connection.connectedAt).toLocaleString();
+                    document.getElementById('connectionDetails').innerHTML = `
+                        <div class="info-row"><span class="info-label">Nome</span><span class="info-value">${data.connection.name}</span></div>
+                        <div class="info-row"><span class="info-label">ID</span><span class="info-value">${data.connection.id}</span></div>
+                        <div class="info-row"><span class="info-label">Telefone</span><span class="info-value">${data.connection.phone}</span></div>
+                        <div class="info-row"><span class="info-label">Conectado em</span><span class="info-value">${connectedAt}</span></div>
+                    `;
+                } else {
+                    document.getElementById('userName').textContent = '---';
+                    document.getElementById('userPhone').innerHTML = '<i class="fas fa-phone"></i> ---';
+                    document.getElementById('connectionDetails').innerHTML = '<div class="empty-state"><i class="fas fa-plug-circle-xmark"></i><p>Nenhuma conexão ativa</p></div>';
+                }
+                
+                const qrSection = document.getElementById('qrSection');
+                if (data.qr && data.qr.available && data.qr.image) {
+                    qrSection.innerHTML = `
+                        <div class="qr-code-container"><img id="qrImage" src="${data.qr.image}" alt="QR Code"></div>
+                        <p style="color: var(--warning); font-weight: 600;"><i class="fas fa-clock"></i> Expira em ~60s</p>
+                        <p style="margin-top: 10px; color: #666;">Tentativa #${data.qr.attempts}</p>
+                    `;
+                } else {
+                    qrSection.innerHTML = '<div class="empty-state"><i class="fas fa-qrcode"></i><p>Nenhum QR Code disponível</p></div>';
+                }
+                
+                document.getElementById('qrAttempts').textContent = data.qr?.attempts || 0;
+                const qrStatus = document.getElementById('qrStatus');
+                if (data.qr?.available) qrStatus.innerHTML = '<span class="badge badge-warning">Aguardando</span>';
+                else if (data.qr?.expired) qrStatus.innerHTML = '<span class="badge badge-danger">Expirado</span>';
+                else qrStatus.innerHTML = '<span class="badge badge-info">Indisponível</span>';
+                
+                const schedulerStatus = document.getElementById('schedulerStatus');
+                schedulerStatus.innerHTML = data.features?.scheduler ? 
+                    '<span class="badge badge-success">Ativo</span>' : 
+                    '<span class="badge badge-danger">Inativo</span>';
+                
+                document.getElementById('lastUpdate').textContent = new Date(data.timestamp).toLocaleTimeString();
+                
+                document.getElementById('btnStart').disabled = data.running || data.state === 'STARTING';
+                document.getElementById('btnStop').disabled = !data.running && data.state !== 'STARTING';
+                
+            } catch (error) {
+                showToast('Erro ao atualizar status', 'error');
+            }
+        }
+
+        async function handleStart() {
+            try {
+                addLog('🚀 Iniciando bot...', 'info');
+                const data = await apiCall('/start', 'POST');
+                showToast(data.message || 'Bot iniciado', 'success');
+                addLog('✅ Bot iniciado com sucesso', 'success');
+                setTimeout(updateStatus, 1000);
+            } catch (error) {
+                showToast('Erro ao iniciar bot', 'error');
+            }
+        }
+
+        async function handleStop() {
+            try {
+                addLog('🛑 Parando bot...', 'info');
+                const data = await apiCall('/stop', 'POST');
+                showToast(data.message || 'Bot parado', 'success');
+                addLog('✅ Bot parado com sucesso', 'success');
+                setTimeout(updateStatus, 1000);
+            } catch (error) {
+                showToast('Erro ao parar bot', 'error');
+            }
+        }
+
+        async function handleRestart() {
+            if (confirm('Reiniciar o bot?')) {
+                try {
+                    addLog('🔄 Reiniciando bot...', 'info');
+                    const data = await apiCall('/restart', 'POST');
+                    showToast(data.message || 'Bot reiniciado', 'success');
+                    addLog('✅ Bot reiniciado', 'success');
+                    setTimeout(updateStatus, 1000);
+                } catch (error) {
+                    showToast('Erro ao reiniciar bot', 'error');
+                }
+            }
+        }
+
+        async function handleReset() {
+            if (confirm('⚠️ Isso irá parar o bot, apagar a sessão e reiniciar. Continuar?')) {
+                try {
+                    addLog('🔄 Resetando sessão...', 'warning');
+                    const data = await apiCall('/session/reset', 'POST');
+                    showToast(data.message || 'Sessão resetada', 'success');
+                    addLog('✅ Sessão resetada com sucesso', 'success');
+                    setTimeout(updateStatus, 2000);
+                } catch (error) {
+                    showToast('Erro ao resetar sessão', 'error');
+                }
+            }
+        }
+
+        async function handleDeleteSession() {
+            if (confirm('⚠️ Apagar a sessão? O bot deve estar parado!')) {
+                try {
+                    addLog('🗑️ Apagando sessão...', 'warning');
+                    const data = await apiCall('/session', 'DELETE');
+                    showToast(data.message || 'Sessão apagada', 'success');
+                    addLog('✅ Sessão apagada', 'success');
+                    setTimeout(updateStatus, 1000);
+                } catch (error) {
+                    showToast('Erro ao apagar sessão', 'error');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateStatus();
+            updateInterval = setInterval(updateStatus, 5000);
+            addLog('🚀 Dashboard inicializada', 'success');
+        });
     </script>
-
 </body>
-
 </html>

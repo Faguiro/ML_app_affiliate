@@ -16,41 +16,80 @@ export class TrackedGroupSyncService {
             const groups = await this.sock.groupFetchAllParticipating();
 
             const targetGroups = this.getTargetGroups();
+            const existingTrackedGroups = this.getExistingTrackedGroups();
 
-            let affected = 0;
+            let inserted = 0;
+            let skipped = 0;
 
             for (const [groupJid, group] of Object.entries(groups)) {
-                if (targetGroups.has(groupJid)) continue;
+                // Pular se for grupo de envio (target group)
+                if (targetGroups.has(groupJid)) {
+                    log.debug(`[TrackedGroupSync] Ignorando grupo de envio: ${group.subject}`);
+                    continue;
+                }
 
-                const result = db.run(
-                    `
-                    INSERT INTO tracked_groups (group_jid, group_name, is_active)
-                    VALUES (?, ?, 1)
-                    ON CONFLICT(group_jid)
-                    DO UPDATE SET
-                        group_name = excluded.group_name,
-                        is_active = 1
-                    `,
-                    [groupJid, group.subject || null]
-                );
+                // Pular se já existe na tabela tracked_groups
+                if (existingTrackedGroups.has(groupJid)) {
+                    log.debug(`[TrackedGroupSync] Grupo já existe: ${group.subject}`);
+                    skipped++;
+                    continue;
+                }
 
-                affected += result.changes;
-                log.info(`[TrackedGroupSync] Grupo rastreado adicionado: ${group.subject} (${groupJid})`);
-                await this.delay(1000);
+                // SÓ INSERE SE NÃO EXISTIR
+                try {
+                    const result = db.run(
+                        `INSERT INTO tracked_groups (group_jid, group_name, is_active)
+                         VALUES (?, ?, 1)`,
+                        [groupJid, group.subject || 'Sem nome']
+                    );
+
+                    if (result.changes > 0) {
+                        inserted++;
+                        log.info(`[TrackedGroupSync] ✅ Novo grupo rastreado: ${group.subject} (${groupJid})`);
+                    }
+
+                    // Pequeno delay para evitar sobrecarga
+                    await this.delay(500);
+                    
+                } catch (error) {
+                    if (error.message.includes('UNIQUE constraint failed')) {
+                        log.debug(`[TrackedGroupSync] Grupo já existe (violação de constraint): ${group.subject}`);
+                        skipped++;
+                    } else {
+                        log.error(`[TrackedGroupSync] Erro ao inserir grupo ${group.subject}:`, error);
+                    }
+                }
             }
 
-            log.info(`[TrackedGroupSync] Sincronização concluída. Registros afetados: ${affected}`);
+            log.info(`[TrackedGroupSync] Sincronização concluída. Inseridos: ${inserted}, Pulados: ${skipped}`);
+            
         } catch (err) {
             log.error('[TrackedGroupSync] Erro na sincronização:', err);
         }
     }
 
     getTargetGroups() {
-        const rows = db.query(
-            `SELECT group_jid FROM target_groups WHERE is_active = 1`
-        );
+        try {
+            const rows = db.query(
+                `SELECT group_jid FROM target_groups WHERE is_active = 1`
+            );
+            return new Set(rows.map(r => r.group_jid));
+        } catch (error) {
+            log.error('[TrackedGroupSync] Erro ao buscar target groups:', error);
+            return new Set();
+        }
+    }
 
-        return new Set(rows.map(r => r.group_jid));
+    getExistingTrackedGroups() {
+        try {
+            const rows = db.query(
+                `SELECT group_jid FROM tracked_groups`
+            );
+            return new Set(rows.map(r => r.group_jid));
+        } catch (error) {
+            log.error('[TrackedGroupSync] Erro ao buscar grupos rastreados:', error);
+            return new Set();
+        }
     }
 
     delay(ms) {

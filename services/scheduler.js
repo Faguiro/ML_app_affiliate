@@ -1,88 +1,296 @@
-// services/scheduler.js
+// services/scheduler.js - REFATORADO COM TRATAMENTO INTELIGENTE DE ESTADOS
 import { db } from '../database/db.js';
 import { LinkTracker } from './tracker.js';
-import { AffiliateService } from './affiliate.js';
+import { AffiliateService, ProcessStatus } from './affiliate.js';
 import { config } from '../core/config.js';
 import { log } from '../core/logger.js';
+import { DataNormalizer } from './data-normalizer.js';
+import { MessageBuilder } from './message-builder.js';
 
 export class Scheduler {
     constructor(sock) {
         this.sock = sock;
         this.processing = false;
         this.sending = false;
+        this.authFailureDetected = false; // Flag para parar tentativas em caso de auth failure
     }
 
     start() {
         // Processar links pendentes
         setInterval(() => this.processLinks(), config.processInterval);
-        log.info('intervalo do processo:', config.processInterval);
+        log.info('Intervalo do processo:', config.processInterval);
 
         // Enviar links processados
         setInterval(() => this.sendLinks(), config.sendInterval);
-        log.info('intervalo do envio:', config.sendInterval);
+        log.info('Intervalo do envio:', config.sendInterval);
 
         // Reset diário à meia-noite
         this.scheduleDailyReset();
-
-        // log.info('Agendador iniciado');
     }
 
+    stop() {
+        this.processing = false;
+        this.sending = false;
+        log.info('Agendador parado');
+    }
+
+    /**
+     * Processa links pendentes com tratamento inteligente de estados
+     */
     async processLinks() {
         if (this.processing) return;
+        
+        // Se detectou falha de autenticação, parar processamento
+        if (this.authFailureDetected) {
+            log.error('⚠️ Processamento pausado: falha de autenticação detectada');
+            log.error('   Atualize os cookies e reinicie o sistema');
+            return;
+        }
+        
         this.processing = true;
 
         try {
-            log.info('Processando links pendentes...');
+            log.info('🔄 Processando links pendentes...');
             const pendingLinks = await LinkTracker.getPendingLinks(10);
+
+            if (pendingLinks.length === 0) {
+                log.info('✅ Nenhum link pendente');
+                return;
+            }
+
+            log.info(`📋 ${pendingLinks.length} links para processar`);
 
             for (const link of pendingLinks) {
                 try {
+                    console.log(`\n${'='.repeat(60)}`);
+                    console.log(`🔗 Processando link ID ${link.id}`);
+                    console.log(`URL: ${link.original_url.substring(0, 70)}...`);
+                    
                     const result = await AffiliateService.generateAffiliateLink(link);
-                    log.info(`Link ${link.id} processado:`, result);
+                    
+                    console.log(`📦 Resultado:`, {
+                        success: result.success,
+                        status: result.status,
+                        retry_allowed: result.retry_allowed,
+                        has_link: !!result.affiliate_link
+                    });
 
-                    if (result.success) {
-                        LinkTracker.updateLinkStatus(
-                            link.id,
-                            'ready',
-                            result.affiliate_link,
-                            result.metadata
-                        );
-                        log.info(`Link ${link.id} processado com sucesso`);
-                        this.sendLinks();
-                    } else {
-                        LinkTracker.updateLinkStatus(link.id, 'failed');
-                        log.error(`Link ${link.id} falhou: ${result.error}`);
-                    }
-
-
+                    // ========== TRATAR RESULTADO ==========
+                    await this._handleProcessResult(link, result);
 
                     // Pequena pausa para evitar rate limit
                     await new Promise(resolve => setTimeout(resolve, 1000));
 
                 } catch (error) {
-                    log.error(`Erro ao processar link ${link.id}`, error);
+                    log.error(`❌ Erro ao processar link ${link.id}:`, error.message);
+                    
+                    // Marcar como failed_temporary para tentar novamente depois
+                    LinkTracker.updateLinkStatus(
+                        link.id, 
+                        'failed_temporary',
+                        null,
+                        { error: error.message }
+                    );
                 }
             }
 
+        } catch (error) {
+            log.error('💥 Erro crítico no processamento de links:', error);
         } finally {
             this.processing = false;
         }
     }
 
+    /**
+     * Trata o resultado do processamento de forma inteligente
+     */
+    async _handleProcessResult(link, result) {
+        const linkId = link.id;
+
+        // ========== SUCESSO ==========
+        if (result.success && result.affiliate_link) {
+            log.info(`✅ Link ${linkId} processado com sucesso`);
+            
+            LinkTracker.updateLinkStatus(
+                linkId,
+                'ready',
+                result.affiliate_link,
+                result.metadata
+            );
+            
+            return;
+        }
+
+        // ========== FALHA DE AUTENTICAÇÃO ==========
+        if (result.status === 'failed_auth' || result.status === ProcessStatus.FAILED_AUTH) {
+            log.error(`🔒 Link ${linkId}: FALHA DE AUTENTICAÇÃO`);
+            log.error(`   Mensagem: ${result.error}`);
+            log.error(`   Ação necessária: ${result.requires_action}`);
+            
+            // Marcar como failed permanentemente
+            LinkTracker.updateLinkStatus(
+                linkId,
+                'failed_auth',
+                null,
+                { 
+                    error: result.error,
+                    requires_action: result.requires_action,
+                    timestamp: new Date().toISOString()
+                }
+            );
+            
+            // Ativar flag para parar processamento
+            this.authFailureDetected = true;
+            
+            // Notificar administrador (implementar conforme necessário)
+            this._notifyAuthFailure(result);
+            
+            return;
+        }
+
+        // ========== CAPTCHA DETECTADO ==========
+        if (result.status === 'failed_captcha' || result.status === ProcessStatus.FAILED_CAPTCHA) {
+            log.error(`🤖 Link ${linkId}: CAPTCHA DETECTADO`);
+            log.error(`   Mensagem: ${result.error}`);
+            
+            LinkTracker.updateLinkStatus(
+                linkId,
+                'failed_captcha',
+                null,
+                { 
+                    error: result.error,
+                    requires_action: 'manual_intervention',
+                    timestamp: new Date().toISOString()
+                }
+            );
+            
+            // Pausar processamento temporariamente
+            this.authFailureDetected = true;
+            
+            return;
+        }
+
+        // ========== ERRO PERMANENTE ==========
+        if (result.status === 'failed_permanent' || 
+            result.status === ProcessStatus.FAILED_PERMANENT ||
+            result.status === "failed" ||
+            result.retry_allowed === false) {
+            
+            log.error(`❌ Link ${linkId}: ERRO PERMANENTE`);
+            log.error(`   Tipo: ${result.error_type || 'unknown'}`);
+            log.error(`   Mensagem: ${result.error}`);
+            
+            LinkTracker.updateLinkStatus(
+                linkId,
+                'failed',
+                null,
+                { 
+                    error: result.error,
+                    error_type: result.error_type,
+                    retry_allowed: false,
+                    timestamp: new Date().toISOString()
+                }
+            );
+            
+            return;
+        }
+
+        // ========== ERRO TEMPORÁRIO ==========
+        if (result.status === 'failed_temporary' || 
+            result.status === ProcessStatus.FAILED_TEMPORARY ||
+            result.status === ProcessStatus.FAILED_NETWORK) {
+            
+            log.warn(`⚠️ Link ${linkId}: ERRO TEMPORÁRIO`);
+            log.warn(`   Mensagem: ${result.error}`);
+            log.warn(`   Será tentado novamente na próxima rodada`);
+            
+            // Incrementar contador de tentativas
+            const currentMetadata = link.metadata ? JSON.parse(link.metadata) : {};
+            const retryCount = (currentMetadata.retry_count || 0) + 1;
+            
+            // Se já tentou muitas vezes, marcar como failed
+            if (retryCount >= 5) {
+                log.error(`   ❌ Máximo de tentativas atingido (${retryCount})`);
+                
+                LinkTracker.updateLinkStatus(
+                    linkId,
+                    'failed',
+                    null,
+                    { 
+                        error: result.error,
+                        retry_count: retryCount,
+                        max_retries_reached: true,
+                        timestamp: new Date().toISOString()
+                    }
+                );
+            } else {
+                // Continuar como pending para tentar novamente
+                LinkTracker.updateLinkStatus(
+                    linkId,
+                    'pending',
+                    null,
+                    { 
+                        error: result.error,
+                        retry_count: retryCount,
+                        last_attempt: new Date().toISOString()
+                    }
+                );
+            }
+            
+            return;
+        }
+
+        // ========== STATUS DESCONHECIDO ==========
+        log.warn(`⚠️ Link ${linkId}: Status desconhecido: ${result.status}`);
+        log.warn(`   Marcando como failed_temporary`);
+        
+        LinkTracker.updateLinkStatus(
+            linkId,
+            'pending',
+            null,
+            { 
+                error: result.error || 'Unknown status',
+                status_received: result.status,
+                timestamp: new Date().toISOString()
+            }
+        );
+    }
+
+    /**
+     * Notifica sobre falha de autenticação
+     */
+    _notifyAuthFailure(result) {
+        console.error('\n' + '='.repeat(70));
+        console.error('🚨 ATENÇÃO: FALHA DE AUTENTICAÇÃO DETECTADA');
+        console.error('='.repeat(70));
+        console.error('Mensagem:', result.error);
+        console.error('Ação necessária:', result.requires_action);
+        console.error('\nO processamento foi PAUSADO.');
+        console.error('Para continuar:');
+        console.error('1. Atualize os cookies no arquivo config.json');
+        console.error('2. Reinicie o sistema');
+        console.error('='.repeat(70) + '\n');
+        
+        // TODO: Implementar notificação via email/telegram/webhook
+    }
+
+    /**
+     * Envia links processados para grupos
+     */
     async sendLinks() {
         if (this.sending) return;
         this.sending = true;
 
         try {
-            log.info('Enviando links processados...');
+            log.info('📤 Enviando links processados...');
 
             // Buscar links prontos para envio
             const readyLinks = db.query(
                 `SELECT tl.* FROM tracked_links tl
-             LEFT JOIN sent_links sl ON tl.id = sl.tracked_link_id
-             WHERE tl.status = 'ready' AND sl.id IS NULL
-             ORDER BY tl.processed_at ASC
-             LIMIT 5`
+                 LEFT JOIN sent_links sl ON tl.id = sl.tracked_link_id
+                 WHERE tl.status = 'ready' AND sl.id IS NULL
+                 ORDER BY tl.processed_at ASC
+                 LIMIT 5`
             );
 
             // Buscar grupos destino ativos
@@ -93,30 +301,54 @@ export class Scheduler {
             console.log(`✅ Enviando ${readyLinks.length} links para ${targetGroups.length} grupos`);
 
             for (const link of readyLinks) {
-                console.log(`🔗 Link ${link.id}: ${link.original_url?.substring(0, 50)}...`);
+                console.log(`\n🔗 Link ${link.id}: ${link.original_url?.substring(0, 50)}...`);
 
                 for (const group of targetGroups) {
                     console.log(`  📱 Tentando grupo: ${group.group_name}`);
 
-                    // Verificar detalhadamente
                     const canSend = db.canSendToGroup(group.group_jid);
                     console.log(`  📊 canSendToGroup retornou: ${canSend}`);
 
                     if (canSend) {
                         try {
-                            const message = this.createMessage(link);
-                            console.log(`  ✉️  Enviando mensagem...`);
+                            // Parse dados
+                            const apiMetadata = this._parseMetadata(link.metadata);
+                            const whatsappCopy = this._parseCopyText(link.copy_text);
 
-                            const payload = this.createMessagePayload(link);
+                            // Garantir affiliate_link
+                            if (!link.affiliate_link && !apiMetadata.affiliate_link) {
+                                throw new Error('Link de afiliado não encontrado');
+                            }
 
+                            if (!apiMetadata.affiliate_link) {
+                                apiMetadata.affiliate_link = link.affiliate_link;
+                            }
 
+                            // Normalizar dados
+                            const normalizedData = DataNormalizer.normalize(
+                                apiMetadata, 
+                                whatsappCopy
+                            );
+
+                            if (!normalizedData.affiliate_link) {
+                                normalizedData.affiliate_link = link.affiliate_link;
+                            }
+
+                            // Construir payload
+                            const payload = MessageBuilder.buildPayload(normalizedData);
+
+                            if (!payload || (!payload.text && !payload.caption)) {
+                                throw new Error('Payload vazio ou inválido');
+                            }
+
+                            // Enviar
                             await this.sock.sendMessage(group.group_jid, payload);
 
                             // Registrar envio
                             db.run(
                                 `INSERT INTO sent_links (tracked_link_id, target_group_jid, message)
-                             VALUES (?, ?, ?)`,
-                                [link.id, group.group_jid, message]
+                                 VALUES (?, ?, ?)`,
+                                [link.id, group.group_jid, payload.caption || payload.text]
                             );
 
                             // Incrementar contador
@@ -124,7 +356,6 @@ export class Scheduler {
 
                             console.log(`  ✅ Enviado com sucesso para ${group.group_name}`);
 
-                            // Pequena pausa
                             await new Promise(resolve => setTimeout(resolve, 500));
 
                         } catch (error) {
@@ -132,26 +363,13 @@ export class Scheduler {
                             log.error(`Erro ao enviar para ${group.group_name}`, error);
                         }
                     } else {
-                        console.log(`  ⏸️  Grupo ${group.group_name} não pode receber envio agora`);
-
-                        // Verificar por que não pode enviar
-                        const groupInfo = db.get(
-                            `SELECT sent_today, daily_limit, last_reset, last_sent 
-                         FROM target_groups WHERE group_jid = ?`,
-                            [group.group_jid]
-                        );
-
-                        if (groupInfo) {
-                            console.log(`  📈 Status do grupo: 
-                          Enviados hoje: ${groupInfo.sent_today}/${groupInfo.daily_limit}
-                          Último reset: ${groupInfo.last_reset}
-                          Último envio: ${groupInfo.last_sent}`);
-                        }
+                        this._logGroupStatus(group);
                     }
                 }
-                // Pequena pausa entre links
+                
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
+            
             await new Promise(resolve => setTimeout(resolve, 1000));
 
         } catch (error) {
@@ -160,90 +378,52 @@ export class Scheduler {
         } finally {
             this.sending = false;
         }
-    }   
+    }
 
-    createMessagePayload(link) {
+    // ==================== HELPERS ====================
+
+    _parseMetadata(metadataStr) {
         try {
-            const metadata = link.metadata ? JSON.parse(link.metadata) : {};
-            const caption = this.createMessage(link);
-
-            // Verificar se há imagem nos metadados da IA
-            if (metadata.product_image && metadata.product_image.startsWith('data:image')) {
-                console.log('  🖼️  Enviando com imagem do copy_text (base64)');
-                return {
-                    image: { url: metadata.product_image },
-                    caption: caption
-                };
-            }
-
-            // Verificar se há imagem URL
-            if (metadata.product_image && metadata.product_image.startsWith('http')) {
-                console.log('  🖼️  Enviando com imagem URL:', metadata.product_image);
-                return {
-                    image: { url: metadata.product_image },
-                    caption: caption
-                };
-            }
-
-            console.log('  📝 Enviando como mensagem de texto');
-            return { text: caption };
-
+            if (!metadataStr) return {};
+            const parsed = JSON.parse(metadataStr);
+            return parsed;
         } catch (error) {
-            console.error('Erro ao criar payload:', error);
-            return { text: this.createMessage(link) };
+            log.error('Erro ao parsear metadata:', error.message);
+            return {};
         }
     }
 
-    createMessage(link) {
-        console.log('  📝 Criando mensagem para o link:', JSON.stringify(link, null, 2));
-
+    _parseCopyText(copyTextStr) {
         try {
-            const metadata = link.metadata ? JSON.parse(link.metadata) : {};
-            const copyText = link.copy_text ? JSON.parse(link.copy_text) : {};
-
-            let message = ``;
-
-            // Título do produto (prioridade: metadata > copy_text)
-            const title = metadata.product_title || copyText.title || 'Produto Recomendado';
-            message += `*${title}*\n\n`;
-
-            // Link afiliado (sempre)
-            message += `🔗 ${link.affiliate_link}\n\n`;
-
-            // Prioridade: Descrição da IA > Fallback
-            if (metadata.ai_description) {
-                message += `${metadata.ai_description}\n\n`;
-            } else if (copyText.description) {
-                // Usar um trecho da descrição original se não houver IA
-                const shortDesc = copyText.description.substring(0, 150) + '...';
-                message += `${shortDesc}\n\n`;
-            } else {
-                message += `✨ Recomendação especial dos membros do grupo!\n\n`;
-            }
-
-            // Informações de preço (extraídas do texto original)
-            if (copyText.text) {
-                const priceMatch = copyText.text.match(/\*💸Por 🔥: R\$\s*([\d,.-]+(?:\s*-\s*R\$\s*[\d,.]+)?)\*/);
-                if (priceMatch) {
-                    message += `💰 Preço: R$ ${priceMatch[1]}\n`;
-                }
-            } else if (metadata.price) {
-                message += `💰 ${metadata.price}\n`;
-            }
-
-            // Rodapé
-            message += `🛡️ Compra 100% segura`;
-
-            return message;
-
+            if (!copyTextStr) return {};
+            const parsed = JSON.parse(copyTextStr);
+            return parsed;
         } catch (error) {
-            log.error('Erro ao criar mensagem:', error);
-            return `🛍️ Recomendação especial:\n\n${link.affiliate_link}\n\nRecomendado pelo grupo ✅`;
+            log.error('Erro ao parsear copy_text:', error.message);
+            return {};
         }
     }
+
+    _logGroupStatus(group) {
+        console.log(`  ⏸️ Grupo ${group.group_name} não pode receber envio agora`);
+
+        const groupInfo = db.get(
+            `SELECT sent_today, daily_limit, last_reset, last_sent 
+             FROM target_groups WHERE group_jid = ?`,
+            [group.group_jid]
+        );
+
+        if (groupInfo) {
+            console.log(`  📈 Status do grupo: 
+              Enviados hoje: ${groupInfo.sent_today}/${groupInfo.daily_limit}
+              Último reset: ${groupInfo.last_reset}
+              Último envio: ${groupInfo.last_sent}`);
+        }
+    }
+
+    // ==================== SCHEDULER ====================
 
     scheduleDailyReset() {
-        // Calcular milissegundos até meia-noite
         const now = new Date();
         const midnight = new Date();
         midnight.setHours(24, 0, 0, 0);
@@ -251,7 +431,6 @@ export class Scheduler {
 
         setTimeout(() => {
             this.resetDailyCounters();
-            // Agendar para todos os dias
             setInterval(() => this.resetDailyCounters(), 24 * 60 * 60 * 1000);
         }, msUntilMidnight);
     }
@@ -259,5 +438,17 @@ export class Scheduler {
     resetDailyCounters() {
         db.run(`UPDATE target_groups SET sent_today = 0, last_reset = date('now')`);
         log.info('Contadores diários resetados');
+        
+        // Reset auth failure flag no início do dia
+        this.authFailureDetected = false;
+    }
+
+    /**
+     * Método para resetar manualmente a flag de auth failure
+     * (chamar após atualizar cookies)
+     */
+    resetAuthFailureFlag() {
+        this.authFailureDetected = false;
+        log.info('✅ Flag de falha de autenticação resetada');
     }
 }

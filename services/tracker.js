@@ -5,6 +5,7 @@ import { log } from '../core/logger.js';
 
 export class LinkTracker {
     static extractLinks(text) {
+        console.log('Extraindo links de:', text);
         const urlRegex = /https?:\/\/[^\s]+/gi;
         return (text.match(urlRegex) || []).map(url => ({
             url,
@@ -13,10 +14,12 @@ export class LinkTracker {
     }
 
     static isRegisteredDomain(domain) {
+        console.log('Verificando domínio registrado:', domain);
         const result = db.get(
             'SELECT id FROM affiliate_domains WHERE domain = ? AND is_active = 1',
             [domain]
         );
+        console.log('Resultado da consulta:', result);
         return !!result;
     }
 
@@ -47,6 +50,8 @@ export class LinkTracker {
 
             // Extrair links
             const links = this.extractLinks(text);
+       
+            console.log('Links extraídos:', links || []); 
             if (links.length === 0) return 0;
 
             // Filtrar apenas links de domínios registrados
@@ -64,7 +69,7 @@ export class LinkTracker {
                 // Registrar grupo se não existir
                 db.run(
                     `INSERT OR IGNORE INTO tracked_groups (group_jid, group_name)
-                 VALUES (?, ?)`,
+                    VALUES (?, ?)`,
                     [jid, groupName]
                 );
 
@@ -101,7 +106,7 @@ export class LinkTracker {
                 // (útil se os links forem encurtados de forma diferente)
                 const similarExists = db.get(
                     `SELECT id, original_url, affiliate_link FROM tracked_links 
-                 WHERE affiliate_link LIKE ? OR original_url LIKE ?`,
+                    WHERE affiliate_link LIKE ? OR original_url LIKE ?`,
                     [`%${new URL(link.url).pathname}%`, `%${new URL(link.url).pathname}%`]
                 );
 
@@ -115,8 +120,8 @@ export class LinkTracker {
                 // Inserir link
                 db.run(
                     `INSERT INTO tracked_links 
-                 (original_url, domain, group_jid, sender_name, status, copy_text)
-                 VALUES (?, ?, ?, ?, 'pending', ?)`,
+                    (original_url, domain, group_jid, sender_name, status, copy_text)
+                    VALUES (?, ?, ?, ?, 'pending', ?)`,
                     [
                         link.url,
                         link.domain,

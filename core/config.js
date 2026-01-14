@@ -44,7 +44,7 @@ class Config {
 
     // API Externa
     get apiUrl() {
-        return process.env.AFFILIATE_API_URL || 'https://grupossd.xyz';
+        return process.env.AFFILIATE_API_URL || 'http://192.168.100.5:5000';
     }
 
     get apiTimeout() {
