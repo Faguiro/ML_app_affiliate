@@ -82,7 +82,7 @@ class WhatsAppBot {
                 this.sock = makeWASocket({
                     auth: state,
                     logger: pino({ level: 'silent' }),
-                    printQRInTerminal: false,
+                    printQRInTerminal: true,
                     connectTimeoutMs: 60000,
                     defaultQueryTimeoutMs: 60000,
                     keepAliveIntervalMs: 30000
