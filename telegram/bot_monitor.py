@@ -143,7 +143,7 @@ class MessageMonitor:
                 (original_url, domain, group_jid, sender_name, copy_text, status)
                 VALUES (?, ?, ?, ?, ?, 'pending')
             """, (original_url, domain, group_jid, sender_name,
-                  (copy_text or '')[:500]))
+                  copy_text))
 
             link_id = cursor.lastrowid
             conn.commit()
@@ -267,14 +267,36 @@ class MessageMonitor:
 
                 if is_affiliate:
                     domain = self.get_domain_from_url(url)
+                    import json
+
+                    copy_payload = {
+                        "text": msg.text,           
+                        "matchedText": url,
+                        "title": None,
+                        "description": None,
+                        "previewType": "NONE",
+                        }
+                    
+                    if msg.web_preview:
+                        wp = msg.web_preview
+                        copy_payload.update({
+                            "title": wp.title,
+                            "description": wp.description,
+                            "previewType": "WEB",
+                            "siteName": wp.site_name,
+                            "url": wp.url
+    })
+                    
+                    copy_text = json.dumps(copy_payload, ensure_ascii=False)
+
 
                     # Salva no banco
                     link_id = await self.save_tracked_link(
-                        original_url=url,
-                        domain=domain,
-                        group_jid=group_jid,
-                        sender_name=None,  # Não busca nome para economizar recursos
-                        copy_text=text[:300]
+                    original_url=url,
+                    domain=domain,
+                    group_jid=group_jid,
+                    sender_name=None,
+                    copy_text=copy_text
                     )
 
                     if link_id:
