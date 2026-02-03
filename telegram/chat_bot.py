@@ -223,19 +223,26 @@ class ChatBot:
     
     def _log_message(self, chat_id: str, message: str, as_bot: bool, 
                     success: bool, error: str = None):
-        """Registra envio de mensagem no log"""
+        """Registra envio de mensagem no banco de dados"""
         try:
-            with open('message_log.csv', 'a', encoding='utf-8') as f:
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                sender = 'BOT' if as_bot else 'USER'
-                status = 'SUCCESS' if success else 'FAILED'
-                error_msg = error if error else ''
-                
-                # Trunca mensagem muito longa para o CSV
-                msg_preview = message[:100] + '...' if len(message) > 100 else message
-                msg_preview = msg_preview.replace('\n', ' ').replace(',', ';')
-                
-                f.write(f'{timestamp},{sender},{chat_id},{status},{msg_preview},{error_msg}\n')
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            sender = 'BOT' if as_bot else 'USER'
+            status = 'SUCCESS' if success else 'FAILED'
+            error_msg = error if error else ''
+            
+            # Trunca mensagem muito longa
+            msg_preview = message[:100] + '...' if len(message) > 100 else message
+            
+            cursor.execute('''
+                INSERT INTO message_logs (timestamp, sender, chat_id, status, message_preview, error)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (timestamp, sender, str(chat_id), status, msg_preview, error_msg))
+            
+            conn.commit()
+            conn.close()
                 
         except Exception as e:
             logger.error(f"Erro ao registrar log: {e}")
@@ -249,437 +256,198 @@ class ChatBot:
             chat_ids: Lista de IDs ou usernames
             message: Texto da mensagem
             as_bot: Se True, envia como bot
-            delay: Delay entre envios (em segundos)
+            delay: Tempo de espera entre envios (segundos)
         """
-        print(f"\n📨 Enviando mensagem para {len(chat_ids)} chats...")
-        print(f"⏳ Delay entre envios: {delay} segundos")
+        print(f"\n📨 Enviando para {len(chat_ids)} chats...")
         
-        successful = 0
-        failed = 0
+        success_count = 0
+        failed_count = 0
         
         for i, chat_id in enumerate(chat_ids, 1):
-            print(f"\n[{i}/{len(chat_ids)}] Enviando para: {chat_id}")
+            print(f"\n[{i}/{len(chat_ids)}] Processando {chat_id}...")
             
             success = await self.send_message(chat_id, message, as_bot)
             
             if success:
-                successful += 1
+                success_count += 1
             else:
-                failed += 1
+                failed_count += 1
             
             # Aguarda entre envios (exceto no último)
             if i < len(chat_ids):
-                print(f"⏳ Aguardando {delay} segundos...")
+                print(f"⏳ Aguardando {delay}s...")
                 await asyncio.sleep(delay)
         
+        # Resumo
         print(f"\n{'='*50}")
-        print(f"📊 RESULTADO DO ENVIO EM MASSA")
-        print(f"   ✅ Sucessos: {successful}")
-        print(f"   ❌ Falhas: {failed}")
-        print(f"   📊 Total: {len(chat_ids)}")
+        print(f"✅ Sucesso: {success_count}")
+        print(f"❌ Falhas: {failed_count}")
         print(f"{'='*50}")
     
-    async def search_chats(self, search_term: str, search_in: str = 'all'):
-        """
-        Busca chats por nome ou username
-        
-        Args:
-            search_term: Termo de busca
-            search_in: 'all', 'users', 'groups', 'channels'
-        """
-        print(f"\n🔍 Buscando por: '{search_term}'")
-        
-        all_chats = await self.list_all_chats(200)
-        
-        # Filtra por tipo se especificado
-        if search_in == 'users':
-            chats = [c for c in all_chats if c['is_user']]
-        elif search_in == 'groups':
-            chats = [c for c in all_chats if c['is_group']]
-        elif search_in == 'channels':
-            chats = [c for c in all_chats if c['is_channel']]
-        else:
-            chats = all_chats
-        
-        # Filtra por termo de busca
-        results = []
-        search_lower = search_term.lower()
-        
-        for chat in chats:
-            if (search_lower in chat['name'].lower() or
-                (chat['username'] and search_lower in chat['username'].lower())):
-                results.append(chat)
-        
-        return results
-    
     async def interactive_mode(self):
-        """Modo interativo do ChatBot"""
+        """Modo interativo do bot"""
         if not await self.initialize():
             return
         
-        print("\n" + "="*50)
-        print("💬 CHAT BOT - MODO INTERATIVO")
-        print("="*50)
-        
         while True:
-            print("\n" + "="*40)
-            print("📱 MENU PRINCIPAL")
-            print("="*40)
-            print("1. 👤 Listar usuários")
-            print("2. 👥 Listar grupos/canais")
-            print("3. 💾 Listar grupos do banco de dados")
-            print("4. 🔍 Buscar chats")
-            print("5. 📤 Enviar mensagem para um chat")
-            print("6. 📨 Enviar mensagem para múltiplos chats")
-            print("7. 💬 Conversar com um chat específico")
-            print("8. 🗑️  Limpar histórico de um chat")
-            print("9. 📊 Estatísticas")
-            print("0. 🚪 Sair")
-            print("="*40)
-            
             try:
-                choice = input("\n🎯 Escolha uma opção: ").strip()
+                print("\n" + "="*50)
+                print("🎛️  MENU PRINCIPAL")
+                print("="*50)
+                print("1. 📋 Listar chats")
+                print("2. 📤 Enviar mensagem")
+                print("3. 📨 Envio em massa")
+                print("4. 💬 Modo conversa")
+                print("5. 🗑️  Limpar histórico")
+                print("6. 📊 Estatísticas")
+                print("0. 🚪 Sair")
                 
-                if choice == '1':
-                    await self._menu_list_users()
-                elif choice == '2':
-                    await self._menu_list_groups()
-                elif choice == '3':
-                    await self._menu_list_db_groups()
-                elif choice == '4':
-                    await self._menu_search()
-                elif choice == '5':
-                    await self._menu_send_single()
-                elif choice == '6':
-                    await self._menu_send_bulk()
-                elif choice == '7':
-                    await self._menu_chat_specific()
-                elif choice == '8':
-                    await self._menu_clear_history()
-                elif choice == '9':
-                    await self._menu_stats()
-                elif choice == '0':
-                    print("\n👋 Saindo...")
+                choice = input("\nEscolha uma opção: ").strip()
+                
+                if choice == '0':
+                    print("\n👋 Até logo!")
                     break
+                elif choice == '1':
+                    await self._menu_list_chats()
+                elif choice == '2':
+                    await self._menu_send_message()
+                elif choice == '3':
+                    await self._menu_bulk_send()
+                elif choice == '4':
+                    await self._menu_conversation()
+                elif choice == '5':
+                    await self._menu_clear_history()
+                elif choice == '6':
+                    await self._menu_stats()
                 else:
-                    print("❌ Opção inválida!")
-            
+                    print("❌ Opção inválida")
+                    
             except KeyboardInterrupt:
-                print("\n\n⚠️  Operação cancelada pelo usuário")
+                print("\n\n👋 Saindo...")
+                break
             except Exception as e:
                 print(f"❌ Erro: {e}")
+                import traceback
+                traceback.print_exc()
     
-    async def _menu_list_users(self):
-        """Menu para listar usuários"""
-        print("\n👤 LISTANDO USUÁRIOS")
-        users = await self.list_users()
-        
-        if not users:
-            print("📭 Nenhum usuário encontrado")
-            return
-        
-        print(f"\n📊 Total: {len(users)} usuários\n")
-        
-        for i, user in enumerate(users, 1):
-            unread = f"📬({user['unread_count']})" if user['unread_count'] > 0 else ""
-            bot_access = "🤖" if user.get('bot_has_access') else ""
-            
-            print(f"{i:3d}. {user['icon']} {user['name']} {unread} {bot_access}")
-            if user['username']:
-                print(f"     📎 @{user['username']}")
-            print(f"     🆔 {user['id']}")
-            if user['last_message_date']:
-                print(f"     🕒 {user['last_message_date']}")
-            print()
-    
-    async def _menu_list_groups(self, is_choice = None):
-        """Menu para listar grupos"""
-        
-        
-        if is_choice == None: 
-            print("\n👥 LISTANDO GRUPOS E CANAIS")
-            print("1. Grupos apenas")
-            print("2. Canais apenas")
-            print("3. Todos")
-            sub_choice = input("\nEscolha: ").strip()
-        else :
-            sub_choice = is_choice
-            
-        if sub_choice == '1':
-            include_channels = False
-            label = "GRUPOS"
-        elif sub_choice == '2':
-            groups = await self.list_groups(include_channels=True)
-            groups = [g for g in groups if g['is_channel']]
-            label = "CANAIS"
-        else:
-            include_channels = True
-            label = "GRUPOS E CANAIS"
-        
-        if sub_choice != '2':
-            groups = await self.list_groups(include_channels)
-        
-        if not groups:
-            print(f"📭 Nenhum {label.lower()} encontrado")
-            return
-        
-        print(f"\n📊 Total: {len(groups)} {label.lower()}\n")
-        
-        for i, group in enumerate(groups, 1):
-            unread = f"📬({group['unread_count']})" if group['unread_count'] > 0 else ""
-            bot_access = "🤖" if group.get('bot_has_access') else "⛔"
-            members = f"👥{group['participants_count']}" if group['participants_count'] > 0 else ""
-            
-
-            if is_choice == None:
-                print(f"{i:3d}. {group['icon']} {group['name']} {unread} {bot_access} {members}")
-                if group['username']:
-                    print(f"     📎 @{group['username']}")
-                print(f"     🆔 {group['id']}")
-                print(f"     📋 {group['type']}")
-                if group['last_message_date']:
-                    print(f"     🕒 {group['last_message_date']}")
-                print()
-            else:
-                return groups
-            
-    async def _menu_list_db_groups(self):
-        """Menu para listar grupos do banco"""
-        print("\n💾 GRUPOS DO BANCO DE DADOS")
-        groups = await self.list_groups_from_db()
-        
-        if not groups:
-            print("📭 Nenhum grupo no banco de dados")
-            return
-        
-        print(f"\n📊 Total: {len(groups)} grupos\n")
-        
-        for i, group in enumerate(groups, 1):
-            print(f"{i:3d}. 👥 {group['name']}")
-            if group['username']:
-                print(f"     📎 @{group['username']}")
-            print(f"     🆔 {group['id']}")
-            print(f"     🗃️  ID no BD: {group['db_id']}")
-            print()
-    
-    async def _menu_search(self):
-        """Menu de busca"""
-        print("\n🔍 BUSCAR CHATS")
-        search_term = input("Digite o termo de busca: ").strip()
-        
-        if not search_term:
-            print("❌ Termo de busca vazio")
-            return
-        
-        print("\nOnde buscar?")
+    async def _menu_list_chats(self):
+        """Menu para listar chats"""
+        print("\n📋 LISTAR CHATS")
         print("1. Todos os chats")
         print("2. Apenas usuários")
-        print("3. Apenas grupos")
-        print("4. Apenas canais")
+        print("3. Grupos e canais")
+        print("4. Grupos salvos no banco")
         
         choice = input("\nEscolha: ").strip()
         
         if choice == '1':
-            search_in = 'all'
+            chats = await self.list_all_chats()
         elif choice == '2':
-            search_in = 'users'
+            chats = await self.list_users()
         elif choice == '3':
-            search_in = 'groups'
+            chats = await self.list_groups()
         elif choice == '4':
-            search_in = 'channels'
+            chats = await self.list_groups_from_db()
         else:
-            search_in = 'all'
-        
-        results = await self.search_chats(search_term, search_in)
-        
-        if not results:
-            print(f"\n🔍 Nenhum resultado encontrado para '{search_term}'")
+            print("❌ Opção inválida")
             return
         
-        print(f"\n📊 Resultados encontrados: {len(results)}\n")
+        if not chats:
+            print("\n📭 Nenhum chat encontrado")
+            return
         
-        for i, result in enumerate(results, 1):
-            icon = result['icon']
-            bot_access = "🤖" if result.get('bot_has_access') else ""
-            unread = f"📬({result['unread_count']})" if result['unread_count'] > 0 else ""
+        # Exibe chats
+        print(f"\n{'='*80}")
+        print(f"Total: {len(chats)} chats")
+        print(f"{'='*80}")
+        
+        for i, chat in enumerate(chats, 1):
+            icon = chat.get('icon', '💬')
+            name = chat['name']
+            chat_id = chat['id']
             
-            print(f"{i:3d}. {icon} {result['name']} {unread} {bot_access}")
-            if result['username']:
-                print(f"     📎 @{result['username']}")
-            print(f"     🆔 {result['id']}")
-            print(f"     📋 {result['type']}")
-            print()
+            # Informações adicionais
+            extras = []
+            if 'username' in chat and chat['username']:
+                extras.append(f"@{chat['username']}")
+            if 'participants_count' in chat and chat['participants_count'] > 1:
+                extras.append(f"{chat['participants_count']} membros")
+            if 'bot_has_access' in chat and not chat['bot_has_access']:
+                extras.append("⚠️ Bot sem acesso")
+            
+            extras_str = f" ({', '.join(extras)})" if extras else ""
+            
+            print(f"{i:3d}. {icon} {name}")
+            print(f"     ID: {chat_id}{extras_str}")
     
-    async def _menu_send_single(self):
-        """Menu para envio único"""
-        print("\n📤 ENVIAR MENSAGEM ÚNICA")
+    async def _menu_send_message(self):
+        """Menu para enviar mensagem única"""
+        print("\n📤 ENVIAR MENSAGEM")
         
-        # Selecionar tipo de chat
-        print("\nSelecionar chat por:")
-        print("1. ID ou username")
-        print("2. Listar e escolher")
-        
-        choice = input("\nEscolha: ").strip()
-        
-        chat_id = None
-        if choice == '1':
-            chat_id = input("\nDigite ID ou @username: ").strip()
-        elif choice == '2':
-            chats = await self.list_all_chats(50)
-            if not chats:
-                print("❌ Nenhum chat disponível")
-                return
-            
-            print("\n📋 Chats disponíveis:")
-            for i, chat in enumerate(chats[:20], 1):  # Mostra apenas 20
-                print(f"{i:2d}. {chat['icon']} {chat['name']} ({chat['id']})")
-            
-            try:
-                idx = int(input("\nEscolha o número: ")) - 1
-                if 0 <= idx < len(chats):
-                    chat_id = chats[idx]['id']
-                else:
-                    print("❌ Número inválido")
-                    return
-            except:
-                print("❌ Entrada inválida")
-                return
-        
+        # Escolhe destinatário
+        chat_id = input("ID ou @username do destinatário: ").strip()
         if not chat_id:
-            print("❌ Chat não especificado")
+            print("❌ ID inválido")
             return
         
-        # Configurar mensagem
-        print("\n✏️  CONFIGURAR MENSAGEM")
-        print("Digite a mensagem (Ctrl+D para finalizar, Ctrl+C para cancelar):")
-        print("-" * 40)
+        # Escolhe remetente
+        print("\nEnviar como:")
+        print("1. Bot (padrão)")
+        print("2. Usuário")
+        sender_choice = input("Escolha (Enter = Bot): ").strip()
+        as_bot = sender_choice != '2'
         
-        try:
-            lines = []
-            while True:
-                try:
-                    line = input()
-                    lines.append(line)
-                except EOFError:
-                    break
-                except KeyboardInterrupt:
-                    print("\n❌ Cancelado")
-                    return
-            
-            message = '\n'.join(lines)
-            
-            if not message.strip():
-                print("❌ Mensagem vazia")
-                return
+        # Mensagem
+        print("\nDigite a mensagem (Enter vazio para cancelar):")
+        print("(Suporta Markdown: **negrito**, *itálico*, [link](url))")
+        message = input("> ").strip()
         
-        except Exception as e:
-            print(f"❌ Erro: {e}")
+        if not message:
+            print("❌ Mensagem vazia, cancelando...")
             return
         
-        # Configurar opções
-        print("\n⚙️  CONFIGURAÇÕES")
-        as_bot = input("Enviar como bot? (s/n): ").strip().lower() != 'n'
-        
-        parse_mode = input("Modo de formatação (markdown/html/none): ").strip().lower()
-        if parse_mode not in ['markdown', 'html', 'none']:
-            parse_mode = 'markdown'
-        if parse_mode == 'none':
-            parse_mode = None
-        
-        link_preview = input("Mostrar pré-visualização de links? (s/n): ").strip().lower() != 'n'
-        
-        # Confirmar
-        print(f"\n📝 RESUMO DO ENVIO:")
-        print(f"   Para: {chat_id}")
-        print(f"   Como: {'🤖 Bot' if as_bot else '👤 Usuário'}")
-        print(f"   Tamanho: {len(message)} caracteres")
-        print(f"   Preview: {'Sim' if link_preview else 'Não'}")
-        
-        confirm = input("\n✅ Confirmar envio? (s/n): ").strip().lower()
-        if confirm != 's':
-            print("❌ Envio cancelado")
-            return
-        
-        # Enviar
-        await self.send_message(chat_id, message, as_bot, parse_mode, link_preview)
+        # Envia
+        await self.send_message(chat_id, message, as_bot)
     
-    async def _menu_send_bulk(self):
+    async def _menu_bulk_send(self):
         """Menu para envio em massa"""
         print("\n📨 ENVIO EM MASSA")
         
-        # Selecionar fonte dos chats
-        print("\nSelecionar chats de:")
-        print("1. Lista manual (digitar IDs/usernames)")
-        print("2. Grupos do banco de dados")
-        print("3. Buscar e selecionar")
+        # Opções de seleção
+        print("\n1. Digitar IDs manualmente")
+        print("2. Usar grupos do banco de dados")
         
         choice = input("\nEscolha: ").strip()
         
-        chat_ids = []
-        
         if choice == '1':
-            print("\n📝 Digite os IDs/usernames (um por linha, linha vazia para terminar):")
-            while True:
-                try:
-                    chat_id = input().strip()
-                    if not chat_id:
-                        break
-                    chat_ids.append(chat_id)
-                except EOFError:
-                    break
-        
+            ids_input = input("\nIDs (separados por vírgula): ").strip()
+            chat_ids = [id.strip() for id in ids_input.split(',') if id.strip()]
         elif choice == '2':
             groups = await self.list_groups_from_db()
             if not groups:
-                print("❌ Nenhum grupo no banco de dados")
+                print("❌ Nenhum grupo no banco")
                 return
             
-            # Mostrar grupos
-            for i, group in enumerate(groups, 1):
-                print(f"{i:3d}. {group['name']} ({group['id']})")
+            print(f"\nEncontr ados {len(groups)} grupos:")
+            for i, g in enumerate(groups, 1):
+                print(f"{i}. {g['name']} ({g['id']})")
             
-            selection = input("\nSelecionar quais? (todos, ou números separados por vírgula): ").strip()
+            print("\nEnviar para:")
+            print("1. Todos")
+            print("2. Selecionar específicos")
             
-            if selection.lower() == 'todos':
-                chat_ids = [group['id'] for group in groups]
+            sub_choice = input("\nEscolha: ").strip()
+            
+            if sub_choice == '1':
+                chat_ids = [str(g['id']) for g in groups]
             else:
+                indices_input = input("Números (separados por vírgula): ").strip()
                 try:
-                    indices = [int(x.strip()) - 1 for x in selection.split(',')]
-                    for idx in indices:
-                        if 0 <= idx < len(groups):
-                            chat_ids.append(groups[idx]['id'])
+                    indices = [int(i.strip())-1 for i in indices_input.split(',')]
+                    chat_ids = [str(groups[i]['id']) for i in indices if 0 <= i < len(groups)]
                 except:
-                    print("❌ Seleção inválida")
+                    print("❌ Entrada inválida")
                     return
-        
-        elif choice == '3':
-            search_term = input("\n🔍 Termo de busca: ").strip()
-            if not search_term:
-                print("❌ Termo vazio")
-                return
-            
-            results = await self.search_chats(search_term, 'all')
-            if not results:
-                print("❌ Nenhum resultado")
-                return
-            
-            for i, result in enumerate(results, 1):
-                print(f"{i:3d}. {result['icon']} {result['name']} ({result['id']})")
-            
-            selection = input("\nSelecionar quais? (todos, ou números separados por vírgula): ").strip()
-            
-            if selection.lower() == 'todos':
-                chat_ids = [result['id'] for result in results]
-            else:
-                try:
-                    indices = [int(x.strip()) - 1 for x in selection.split(',')]
-                    for idx in indices:
-                        if 0 <= idx < len(results):
-                            chat_ids.append(results[idx]['id'])
-                except:
-                    print("❌ Seleção inválida")
-                    return
-        
         else:
             print("❌ Opção inválida")
             return
@@ -688,95 +456,62 @@ class ChatBot:
             print("❌ Nenhum chat selecionado")
             return
         
-        # Configurar mensagem
-        print("\n✏️  MENSAGEM PARA TODOS OS CHATS")
-        print("Digite a mensagem (Ctrl+D para finalizar):")
-        print("-" * 40)
+        # Mensagem
+        print(f"\nMensagem para {len(chat_ids)} chats:")
+        message = input("> ").strip()
         
-        try:
-            lines = []
-            while True:
-                try:
-                    line = input()
-                    lines.append(line)
-                except EOFError:
-                    break
-            
-            message = '\n'.join(lines)
-            
-            if not message.strip():
-                print("❌ Mensagem vazia")
-                return
-        
-        except Exception as e:
-            print(f"❌ Erro: {e}")
+        if not message:
+            print("❌ Mensagem vazia")
             return
         
-        # Configurar opções
-        print("\n⚙️  CONFIGURAÇÕES")
-        as_bot = input("Enviar como bot? (s/n): ").strip().lower() != 'n'
-        
+        # Delay
         try:
-            delay = float(input("Delay entre envios (segundos): ").strip() or "2.0")
+            delay = float(input("\nDelay entre envios (segundos, padrão=2): ").strip() or "2")
         except:
             delay = 2.0
         
-        # Confirmar
-        print(f"\n📝 RESUMO DO ENVIO EM MASSA:")
-        print(f"   Número de chats: {len(chat_ids)}")
-        print(f"   Como: {'🤖 Bot' if as_bot else '👤 Usuário'}")
-        print(f"   Delay: {delay} segundos")
-        print(f"   Tamanho da mensagem: {len(message)} caracteres")
+        # Confirma
+        print(f"\n⚠️  Confirma envio para {len(chat_ids)} chats com delay de {delay}s?")
+        confirm = input("Digite 'sim' para confirmar: ").strip().lower()
         
-        confirm = input("\n⚠️  CONFIRMAR ENVIO EM MASSA? (s/n): ").strip().lower()
-        if confirm != 's':
+        if confirm != 'sim':
             print("❌ Cancelado")
             return
         
-        # Enviar
-        await self.send_bulk_messages(chat_ids, message, as_bot, delay)
+        # Envia
+        await self.send_bulk_messages(chat_ids, message, delay=delay)
     
-    async def _menu_chat_specific(self):
-        """Menu para conversar com chat específico"""
-        print("\n💬 CONVERSAR COM CHAT ESPECÍFICO")
+    async def _menu_conversation(self):
+        """Modo conversa contínua com um chat"""
+        print("\n💬 MODO CONVERSA")
         
-        chat_id = input("Digite ID ou @username do chat: ").strip()
+        chat_id = input("ID ou @username: ").strip()
         if not chat_id:
-            print("❌ Chat não especificado")
+            print("❌ ID inválido")
             return
         
-        print(f"\n💬 Iniciando conversa com {chat_id}")
-        print("Digite '!sair' para sair, '!modo usuario' ou '!modo bot' para mudar modo")
-        print("-" * 50)
+        print("\nEnviar como:")
+        print("1. Bot (padrão)")
+        print("2. Usuário")
+        sender_choice = input("Escolha (Enter = Bot): ").strip()
+        as_bot = sender_choice != '2'
         
-        as_bot = True
+        print("\n" + "="*50)
+        print(f"💬 Conversando com {chat_id}")
+        print("Digite 'sair' para voltar ao menu")
+        print("="*50 + "\n")
         
         while True:
             try:
-                message = input(f"[{'BOT' if as_bot else 'USER'}] > ").strip()
+                message = input("Você: ").strip()
                 
-                if not message:
-                    continue
-                
-                if message.lower() == '!sair':
-                    print("👋 Saindo do modo conversa...")
+                if message.lower() == 'sair':
                     break
                 
-                if message.lower() == '!modo usuario':
-                    as_bot = False
-                    print("🔁 Modo alterado para: USUÁRIO")
-                    continue
-                
-                if message.lower() == '!modo bot':
-                    as_bot = True
-                    print("🔁 Modo alterado para: BOT")
-                    continue
-                
-                # Envia a mensagem
-                success = await self.send_message(chat_id, message, as_bot)
-                
-                if not success:
-                    print("❌ Falha ao enviar mensagem")
+                if message:
+                    success = await self.send_message(chat_id, message, as_bot)
+                    if not success:
+                        print("❌ Falha ao enviar mensagem")
             
             except KeyboardInterrupt:
                 print("\n👋 Saindo do modo conversa...")
@@ -795,29 +530,35 @@ class ChatBot:
         """Menu de estatísticas"""
         print("\n📊 ESTATÍSTICAS")
         
-        # Conta mensagens no log
-        try:
-            with open('message_log.csv', 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                total_messages = len(lines) - 1 if lines else 0  # -1 para cabeçalho
-                
-                if total_messages > 0:
-                    bot_messages = sum(1 for line in lines if ',BOT,' in line)
-                    user_messages = total_messages - bot_messages
-                    
-                    print(f"📨 Total de mensagens enviadas: {total_messages}")
-                    print(f"   🤖 Como bot: {bot_messages}")
-                    print(f"   👤 Como usuário: {user_messages}")
-                else:
-                    print("📭 Nenhuma mensagem registrada")
-        except FileNotFoundError:
-            print("📭 Arquivo de log não encontrado")
-        
-        # Conta grupos no banco
+        # Conta mensagens no banco de dados
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Total de mensagens
+            cursor.execute("SELECT COUNT(*) FROM message_logs")
+            total_messages = cursor.fetchone()[0]
+            
+            if total_messages > 0:
+                # Mensagens por tipo de remetente
+                cursor.execute("SELECT COUNT(*) FROM message_logs WHERE sender = 'BOT'")
+                bot_messages = cursor.fetchone()[0]
+                user_messages = total_messages - bot_messages
+                
+                # Mensagens bem-sucedidas vs falhas
+                cursor.execute("SELECT COUNT(*) FROM message_logs WHERE status = 'SUCCESS'")
+                success_messages = cursor.fetchone()[0]
+                failed_messages = total_messages - success_messages
+                
+                print(f"📨 Total de mensagens enviadas: {total_messages}")
+                print(f"   🤖 Como bot: {bot_messages}")
+                print(f"   👤 Como usuário: {user_messages}")
+                print(f"   ✅ Sucesso: {success_messages}")
+                print(f"   ❌ Falhas: {failed_messages}")
+            else:
+                print("📭 Nenhuma mensagem registrada")
+            
+            # Estatísticas de grupos e links
             cursor.execute("SELECT COUNT(*) FROM telegram_groups WHERE is_active = 1")
             db_groups = cursor.fetchone()[0]
             
@@ -841,6 +582,93 @@ class ChatBot:
         """Desconecta todas as conexões"""
         await self.telegram.disconnect()
         print("\n🔌 Conexões encerradas")
+
+
+    async def send_photo(self, chat_id, photo_url, caption=None, parse_mode=None, as_bot=True):
+        """Envia foto usando o TelegramManager"""
+        try:
+            if not hasattr(self, 'telegram'):
+                print("❌ Atributo 'telegram' não encontrado")
+                return False
+            
+            # Usa o cliente do TelegramManager
+            # Provavelmente tem user_client e bot_client lá dentro
+            client = None
+            
+            if as_bot:
+                if hasattr(self.telegram, 'bot_client'):
+                    client = self.telegram.bot_client
+                elif hasattr(self.telegram, 'bot'):
+                    client = self.telegram.bot
+            else:
+                if hasattr(self.telegram, 'user_client'):
+                    client = self.telegram.user_client
+                elif hasattr(self.telegram, 'user'):
+                    client = self.telegram.user
+            
+            if not client:
+                print("❌ Cliente não encontrado no TelegramManager")
+                # Tenta descobrir atributos disponíveis
+                print("   Atributos do telegram:", [a for a in dir(self.telegram) if not a.startswith('_')])
+                return False
+            
+            print(f"📸 Enviando foto via {type(client).__name__}")
+            print(f"   URL: {photo_url[:80]}...")
+            
+            # Método 1: Tenta URL direto (mais eficiente)
+            try:
+                result = await client.send_file(
+                    entity=int(chat_id),
+                    file=photo_url,
+                    caption=caption if caption else None,
+                    parse_mode=parse_mode,
+                    supports_streaming=True
+                )
+                print("✅ Foto enviada via URL")
+                self._log_message(chat_id, caption or 'Photo', as_bot, True)
+                return True
+            except Exception as url_error:
+                print(f"⚠️  URL falhou, baixando...: {url_error}")
+            
+            # Método 2: Baixa e envia
+            import aiohttp
+            from io import BytesIO
+            
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(photo_url) as resp:
+                        if resp.status != 200:
+                            print(f"❌ Falha ao baixar: HTTP {resp.status}")
+                            self._log_message(chat_id, caption or 'Photo', as_bot, False, f'HTTP {resp.status}')
+                            return False
+                        
+                        image_data = await resp.read()
+                        print(f"✅ Baixado {len(image_data)} bytes")
+                        
+                        result = await client.send_file(
+                            entity=int(chat_id),
+                            file=BytesIO(image_data),
+                            caption=caption[:1024] if caption else None,
+                            parse_mode=parse_mode
+                        )
+                        
+                        print(f"📤 Foto enviada: {'✅' if result else '❌'}")
+                        
+                        self._log_message(chat_id, caption or 'Photo', as_bot, result is not None)
+                        
+                        return result is not None
+                        
+            except Exception as download_error:
+                print(f"❌ Erro no download: {download_error}")
+                self._log_message(chat_id, caption or 'Photo', as_bot, False, str(download_error))
+                return False
+                
+        except Exception as e:
+            print(f"❌ Erro geral: {e}")
+            import traceback
+            traceback.print_exc()
+            self._log_message(chat_id, caption or 'Photo', as_bot, False, str(e))
+            return False
 
 async def main():
     """Função principal"""
@@ -888,10 +716,5 @@ async def main():
         await bot.disconnect()
 
 if __name__ == "__main__":
-    # Cria arquivo de log CSV se não existir
-    if not os.path.exists('message_log.csv'):
-        with open('message_log.csv', 'w', encoding='utf-8') as f:
-            f.write('timestamp,sender,chat_id,status,message_preview,error\n')
-    
     # Executa o bot
     asyncio.run(main())

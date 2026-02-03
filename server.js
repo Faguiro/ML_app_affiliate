@@ -363,7 +363,7 @@ function getErrorMessage(errorCode) {
 
 // ==================== INICIALIZAÇÃO DO SERVIDOR ====================
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`
 ╔═══════════════════════════════════════════════╗
 ║     🌐 API WEB INICIADA                       ║
@@ -380,6 +380,19 @@ const server = app.listen(PORT, () => {
 ║     POST   /session/reset  - Resetar tudo     ║
 ╚═══════════════════════════════════════════════╝
     `);
+    // --- LÓGICA DE AUTO-START ADICIONADA AQUI ---
+    try {
+        console.log('🔄 Auto-início configurado: Tentando iniciar o bot...');
+        const result = await startBot();
+        
+        if (result.success) {
+            console.log('✅ Bot iniciado automaticamente com sucesso!');
+        } else {
+            console.warn(`⚠️ O bot não pôde iniciar automaticamente. Razão: ${result.reason}`);
+        }
+    } catch (error) {
+        console.error('❌ Erro fatal ao tentar auto-iniciar o bot:', error);
+    }
 });
 
 // Graceful shutdown

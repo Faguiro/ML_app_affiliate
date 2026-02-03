@@ -29,8 +29,8 @@ export class MessageBuilder {
         }
 
         // 4. CUPOM (se disponível)
-        if (normalizedData.coupon) {
-            sections.push(this._buildCoupon(normalizedData.coupon));
+        if (normalizedData.cupom) {
+            sections.push(this._buildcupom(normalizedData.cupom));
         }
 
         // 5. LINK DE COMPRA (sempre presente)
@@ -86,8 +86,8 @@ export class MessageBuilder {
         return lines.join('\n');
     }
 
-    static _buildCoupon(coupon) {
-        return `🎟️ Cupom: ${coupon}`;
+    static _buildcupom(cupom) {
+        return `🎟️ Cupom: ${cupom}`;
     }
 
     static _buildLink(link) {
@@ -106,7 +106,7 @@ export class MessageBuilder {
             normalizedData.title,
             normalizedData.price.hasPrice ? 
                 `💰 ${PriceFormatter.format(normalizedData.price.current)}` : '',
-            normalizedData.coupon ? `🎟️ ${normalizedData.coupon}` : '',
+            normalizedData.cupom ? `🎟️ ${normalizedData.cupom}` : '',
             `🛒 ${normalizedData.affiliate_link}`
         ].filter(Boolean);
 
@@ -142,8 +142,8 @@ export class MessageBuilder {
         }
 
         // Cupom destacado
-        if (normalizedData.coupon) {
-            sections.push(`\n🎟️ USE O CUPOM: ${normalizedData.coupon}`);
+        if (normalizedData.cupom) {
+            sections.push(`\n🎟️ USE O CUPOM: ${normalizedData.cupom}`);
         }
 
         // Link

@@ -7,12 +7,12 @@ export class PriceParser {
         let price = null;
         let priceOriginal = null;
         let discount = null;
-        let coupon = null;
+        let cupom = null;
         let payment = null;
         
         // CUPOM - prioridade baixa (já extraído do WhatsApp)
-        const couponMatch = clean.match(/CUPOM[:\s]*([A-Z0-9-_]+)/);
-        if (couponMatch) coupon = couponMatch[1];
+        const cupomMatch = clean.match(/CUPOM[:\s]*([A-Z0-9-_]+)/);
+        if (cupomMatch) cupom = cupomMatch[1];
         
         // PIX / CARTÃO
         if (clean.includes('PIX')) payment = 'pix';
@@ -39,7 +39,7 @@ export class PriceParser {
             price,
             price_original: priceOriginal,
             discount_percent: discount,
-            coupon,
+            cupom,
             payment_method: payment,
             raw_price_text: text
         };
