@@ -1,29 +1,31 @@
 module.exports = {
-  apps : [
-    // 1. O Monitor Python (que estava dando erro)
+  apps: [
+    // 🐍 Bot Python
     {
       name: "bot-monitor",
-      cwd: "./telegram", // Define a pasta de trabalho correta
+      cwd: "/home/affiliatebot/ML_app_affiliate/telegram",
       script: "bot_monitor.py",
-      // O PULO DO GATO: Caminho absoluto para o Python do VENV
       interpreter: "/home/affiliatebot/ML_app_affiliate/telegram/venv/bin/python",
       autorestart: true,
       watch: false,
-      max_memory_restart: '200M'
+      max_memory_restart: "200M",
+      out_file: "/var/log/apps/bot-monitor.log",
+      error_file: "/var/log/apps/bot-monitor-error.log"
     },
 
-    // 2. A API Node.js (Server.js)
+    // 🌐 API Node
     {
       name: "meu-app-api",
-      cwd: "./", // Executa na raiz onde está o package.json
+      cwd: "/home/affiliatebot/ML_app_affiliate",
       script: "server.js",
-      // Variáveis de ambiente para o Node
       env: {
         NODE_ENV: "production",
         PORT: 3000
       },
       autorestart: true,
-      watch: false
+      watch: false,
+      out_file: "/var/log/apps/meu-app-api.log",
+      error_file: "/var/log/apps/meu-app-api-error.log"
     }
   ]
-}
+};

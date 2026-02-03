@@ -22,7 +22,7 @@ export class DataNormalizer {
                 title: this.normalizeTitle(api, wa),
                 price: this.normalizePrice(api, wa),
                 image: this.normalizeImage(api, wa),
-                coupon: this.normalizeCoupon(api, wa),
+                cupom: this.normalizeCupom(api, wa),
                 description: this.normalizeDescription(api, wa),
                 affiliate_link: api.affiliate_link || wa.url || ''
             };
@@ -33,7 +33,7 @@ export class DataNormalizer {
                 title: 'Produto em destaque',
                 price: { current: null, original: null, discount: null, hasPrice: false },
                 image: null,
-                coupon: null,
+                cupom: null,
                 description: '',
                 affiliate_link: api.affiliate_link || wa.url || ''
             };
@@ -150,10 +150,10 @@ export class DataNormalizer {
     /**
      * Normaliza cupom de desconto
      */
-    static normalizeCoupon(api, wa) {
+    static normalizeCupom(api, wa) {
         try {
-            const coupon = api?.coupon ?? wa?.coupon;
-            return coupon?.trim() ? coupon.trim().toUpperCase() : null;
+            const cupom = api?.cupom ?? wa?.cupom;
+            return cupom?.trim() ? cupom.trim().toUpperCase() : null;
         } catch (error) {
             console.error('Erro ao normalizar cupom:', error);
             return null;

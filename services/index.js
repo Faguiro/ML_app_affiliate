@@ -207,8 +207,8 @@ class WhatsAppBot {
 
     // Sincronizar grupos rastreados
     try {
-      this.groupSync = new TrackedGroupSyncService(this.sock);
-      await this.groupSync.sync();
+      // this.groupSync = new TrackedGroupSyncService(this.sock);
+      // await this.groupSync.sync();
       log.info("✅ Grupos sincronizados");
     } catch (error) {
       log.error("⚠️ Erro ao sincronizar grupos:", error.message);
@@ -300,7 +300,7 @@ class WhatsAppBot {
 
     if (!text) return;
 
-    // console.log("📩 Texto capturado:", text);
+    // console.log(`\n📩 Texto capturado do grupo: ${jid}\n ${text}\n` );
 
     const isFromMe = msg.key.fromMe;
 
@@ -332,6 +332,13 @@ class WhatsAppBot {
         const count = await LinkTracker.track(this.sock, msg, text);
         if (count > 0) {
           log.info(`🔗 ${count} link(s) rastreado(s)`);
+          console.log("\n--------------------------------------------\n");
+          console.log("Nova mensagem em grupo:", jid);
+          console.log("Autor:", msg.pushName || "Desconhecido");
+          // console.log("Conteúdo:", text);
+          console.log("--------------------------------------------\n");
+          // console.log("exibir msg completa:\n", JSON.stringify(messages, null, 2));
+
         }
       } catch (error) {
         log.error("Erro ao rastrear links:", error.message);
