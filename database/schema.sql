@@ -60,6 +60,55 @@ CREATE TABLE IF NOT EXISTS sent_links (
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS message_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        sender TEXT,
+        chat_id TEXT,
+        status TEXT, -- 'SUCCESS' ou 'FAILED'
+        message_preview TEXT,
+        error_message TEXT
+);
+
+-- CREATE INDEX IF NOT EXISTS idx_logs_status ON message_logs(status)
+-- CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON message_logs(timestamp)
+
+
+CREATE TABLE IF NOT EXISTS channel_cursor (
+    group_id TEXT PRIMARY KEY,
+    last_message_id INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabela de mensagens processadas (CRÍTICA - ESTAVA FALTANDO!)
+CREATE TABLE IF NOT EXISTS processed_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT NOT NULL UNIQUE,
+    group_jid TEXT NOT NULL,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índices para tracked_links
+CREATE INDEX IF NOT EXISTS idx_tracked_links_status 
+ON tracked_links(status);
+
+CREATE INDEX IF NOT EXISTS idx_tracked_links_created 
+ON tracked_links(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tracked_links_domain 
+ON tracked_links(domain);
+
+-- Índices para processed_messages
+CREATE INDEX IF NOT EXISTS idx_processed_messages_id 
+ON processed_messages(message_id);
+
+CREATE INDEX IF NOT EXISTS idx_processed_messages_group 
+ON processed_messages(group_jid);
+
+-- Índices para affiliate_domains
+CREATE INDEX IF NOT EXISTS idx_affiliate_domains_active 
+ON affiliate_domains(is_active);
+
 CREATE INDEX IF NOT EXISTS idx_tracked_links_status ON tracked_links(status);
 CREATE INDEX IF NOT EXISTS idx_tracked_links_domain ON tracked_links(domain);
 CREATE INDEX IF NOT EXISTS idx_target_groups_active ON target_groups(is_active);
