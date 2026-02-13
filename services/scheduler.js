@@ -7,7 +7,10 @@ import { log } from "../core/logger.js";
 import { DataNormalizer } from "./data-normalizer.js";
 import { MessageBuilder } from "./message-builder.js";
 
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 export class Scheduler {
+
     constructor(sock) {
         this.sock = sock;
         this.processing = false;
@@ -18,6 +21,7 @@ export class Scheduler {
         this.sendIntervalId = null;
         this.dailyResetTimeoutId = null;
         this.dailyResetIntervalId = null;
+
     }
 
     start() {
@@ -122,7 +126,7 @@ export class Scheduler {
     }
 
     /**
-     * Processa links pendentes com tratamento inteligente de estados
+     * Parte 1 - Processa links pendentes com tratamento inteligente de estados
      */
     async processLinks() {
         if (this.processing) return;
@@ -159,10 +163,10 @@ export class Scheduler {
                     const result = await AffiliateService.generateAffiliateLink(link);
 
 
-                    console.log (`Link =====> ${JSON.stringify(link, null, 2)}\n\n\n`
+                    console.log(`Link =====> ${JSON.stringify(link, null, 2)}\n\n\n`
 
                     )
-                    
+
                     console.log(`Conteudo do resultado=============\n\n${JSON.stringify(result)}\n\n`);
                     console.log(`📦 Resultado:`, {
                         success: result.success,
@@ -250,122 +254,105 @@ export class Scheduler {
     }
 
     /**
-     * Envia links processados para grupos
+     * Parte 2 - Envia links processados para grupos
      */
+
     async sendLinks() {
         if (this.sending) return;
         this.sending = true;
 
         try {
-            log.info("📤 Buscar links prontos para envio...");
+            log.info("📤 Buscando links para envio...");
 
-            // Buscar links prontos para envio
-            const readyLinks = db.query(
-                `SELECT tl.* FROM tracked_links tl
-                 LEFT JOIN sent_links sl ON tl.id = sl.tracked_link_id
-                 WHERE tl.status = 'ready' AND sl.id IS NULL
-                 ORDER BY tl.processed_at ASC
-                 LIMIT 5`,
+            // 🔒 Lock + fetch atômico
+            const readyLinks = await db.fetchAndLockLinks(5);
+
+            if (!readyLinks.length) {
+                log.info("Nenhum link pronto");
+                return;
+            }
+
+            const targetGroups = await db.query(
+                `SELECT * FROM target_groups WHERE is_active = 1`
             );
 
-            // Buscar grupos destino ativos
-            const targetGroups = db.query(
-                `SELECT * FROM target_groups WHERE is_active = 1`,
-            );
+            if (!targetGroups.length) return;
 
-            if (readyLinks.length > 0 && targetGroups.length > 0) {
-                console.log(
-                    `✅ Enviando ${readyLinks.length} links para ${targetGroups.length} grupos`,
-                ) 
+            for (const link of readyLinks) {
+                try {
+                    const apiMetadata = this._parseMetadata(link.metadata);
+                    const whatsappCopy = this._parseCopyText(link.copy_text);
 
-                for (const link of readyLinks) {
-                    console.log(`\n🔗 Link ${link.id}: ${link.original_url} ...`);
+                    const normalized = DataNormalizer.normalize(
+                        apiMetadata,
+                        whatsappCopy
+                    );
 
-                    for (const group of targetGroups) {
-                        console.log(`  📱 Tentando grupo: ${group.group_name}`);
+                    normalized.affiliate_link ||=
+                        apiMetadata.affiliate_link || link.affiliate_link;
 
-                        const canSend = db.canSendToGroup(group.group_jid);
-                        console.log(`  📊 canSendToGroup retornou: ${canSend}`);
-
-                        if (canSend) {
-                            try {
-                                // Parse dados
-                                const apiMetadata = this._parseMetadata(link.metadata);
-                                const whatsappCopy = this._parseCopyText(link.copy_text);
-
-                                // Garantir affiliate_link
-                                if (!link.affiliate_link && !apiMetadata.affiliate_link) {
-                                    throw new Error("Link de afiliado não encontrado");
-                                }
-
-                                if (!apiMetadata.affiliate_link) {
-                                    apiMetadata.affiliate_link = link.affiliate_link;
-                                }
-                                console.log("METADATA RAW:", apiMetadata);
-                                console.log("TEM CUPOM?", apiMetadata.cupom);
-
-
-                                // Normalizar dados
-                                const normalizedData = DataNormalizer.normalize(
-                                    apiMetadata,
-                                    whatsappCopy,
-                                );
-
-                                console.log("NORMALIZED:", normalizedData);
-
-
-                                if (!normalizedData.affiliate_link) {
-                                    normalizedData.affiliate_link = link.affiliate_link;
-                                }
-
-                                // Construir payload
-                                const payload = MessageBuilder.buildPayload(normalizedData);
-
-                                if (!payload || (!payload.text && !payload.caption)) {
-                                    throw new Error("Payload vazio ou inválido");
-                                }
-
-                                // Enviar
-                                await this.sock.sendMessage(group.group_jid, payload);
-
-                                // Registrar envio
-                                db.run(
-                                    `INSERT INTO sent_links (tracked_link_id, target_group_jid, message)
-                                 VALUES (?, ?, ?)`,
-                                    [link.id, group.group_jid, payload.caption || payload.text],
-                                );
-
-                                // Incrementar contador
-                                db.incrementSentCount(group.group_jid);
-
-                                console.log(
-                                    `  ✅ Enviado com sucesso para ${group.group_name}`,
-                                );
-
-                                await new Promise((resolve) => setTimeout(resolve, 5500));
-                            } catch (error) {
-                                console.error(`  ❌ Erro ao enviar:`, error.message);
-                                log.error(`Erro ao enviar para ${group.group_name}`, error);
-                            }
-                        } else {
-                            this._logGroupStatus(group);
-                        }
+                    if (!normalized.affiliate_link) {
+                        throw new Error("Affiliate link ausente");
                     }
 
-                    await new Promise((resolve) => setTimeout(resolve, 25000));
+                    const payload = MessageBuilder.buildPayload(normalized);
+
+                    if (!payload?.text && !payload?.caption) {
+                        throw new Error("Payload inválido");
+                    }
+
+                    for (const group of targetGroups) {
+                        if (!db.canSendToGroup(group.group_jid)) continue;
+
+                        await this.sock.sendMessage(group.group_jid, payload);
+
+                        await db.run(
+                            `INSERT INTO sent_links 
+                            (tracked_link_id, target_group_jid, message)
+                            VALUES (?, ?, ?)`,
+                            [link.id, group.group_jid, payload.caption || payload.text]
+                        );
+
+                        db.incrementSentCount(group.group_jid);
+
+                        await sleep(5000);
+                    }
+
+                    // ✅ Finaliza link com sucesso
+                    // await db.run(
+                    //     `UPDATE tracked_links 
+                    //     SET status = 'sent' 
+                    //     WHERE id = ?`,
+                    //     [link.id]
+                    // );
+
+                } catch (err) {
+                    log.error(`Falha no link ${link.id}`, err);
+
+                    await db.run(
+                        `UPDATE tracked_links 
+                        SET status = 'failed' 
+                        WHERE id = ?`,
+                        [link.id]
+                    );
                 }
-            }else{
-                    console.log(
-                    `✅ Não há grupos de destino para enviar links ou nenhum link pronto para envio`,
-                ) 
-                }
-            await new Promise((resolve) => setTimeout(resolve, 15000));
-        } catch (error) {
-            log.error("Erro ao enviar links", error);
+
+                await sleep(15000);
+            }
+
+        } catch (err) {
+            log.error("Erro geral no envio", err);
         } finally {
             this.sending = false;
         }
     }
+
+
+
+
+
+    // ==========================================================================
+
 
     // ==================== HELPERS ====================
 
@@ -461,11 +448,11 @@ export class Scheduler {
      * Método para passar a flag "failed_temporary" para "failed"
      * (chamar periodicamente para limpar links que falharam várias vezes)
      */
-    markPermanentFailures() {        
+    markPermanentFailures() {
 
         try {
             const result = db.run(
-            `UPDATE tracked_links
+                `UPDATE tracked_links
              SET status = 'failed'
              WHERE status = 'failed_temporary'
                AND created_at IS NULL
@@ -476,7 +463,7 @@ export class Scheduler {
             );
         } catch (error) {
             log.error("💥 Erro ao marcar falhas permanentes:", error);
-        } 
+        }
     }
 
     markTemporaryFailuresAsPending() {
@@ -490,4 +477,5 @@ export class Scheduler {
         );
         log.info(`✅ Links marcados como pendentes: ${result.changes}`);
     }
+
 }
