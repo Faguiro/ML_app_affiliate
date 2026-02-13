@@ -1,5 +1,6 @@
 // services/message-builder.js
 import { PriceFormatter } from './price-formatter.js';
+import { config } from '../core/config.js';
 
 /**
  * Classe responsável por construir mensagens de afiliados
@@ -13,6 +14,10 @@ export class MessageBuilder {
      * @returns {string} Mensagem formatada
      */
     static build(normalizedData) {
+        // ✅ LOG DE DEBUG
+        console.log('🔍 [BUILDER DEBUG] normalizedData.cupom:', normalizedData.cupom);
+        console.log('🔍 [BUILDER DEBUG] normalizedData completo (primeiros 300 chars):', JSON.stringify(normalizedData).substring(0, 300));
+
         const sections = [];
 
         // 1. TÍTULO (sempre presente)
@@ -20,7 +25,10 @@ export class MessageBuilder {
 
         // 2. DESCRIÇÃO (se disponível)
         if (normalizedData.description) {
+            if (config.is_description){
             sections.push(this._buildDescription(normalizedData.description));
+        }
+
         }
 
         // 3. PREÇO (se disponível)
@@ -30,7 +38,10 @@ export class MessageBuilder {
 
         // 4. CUPOM (se disponível)
         if (normalizedData.cupom) {
+            console.log('✅ [BUILDER DEBUG] Adicionando cupom à mensagem:', normalizedData.cupom);
             sections.push(this._buildcupom(normalizedData.cupom));
+        } else {
+            console.log('⚠️ [BUILDER DEBUG] Cupom NÃO encontrado em normalizedData');
         }
 
         // 5. LINK DE COMPRA (sempre presente)
@@ -39,7 +50,13 @@ export class MessageBuilder {
         // 6. RODAPÉ (sempre presente)
         sections.push(this._buildFooter());
 
-        return sections.join('\n\n').trim();
+        const finalMessage = sections.join('\n\n').trim();
+        
+        // ✅ LOG DE DEBUG
+        console.log('🔍 [BUILDER DEBUG] Mensagem final contém "Cupom"?', finalMessage.includes('Cupom'));
+        console.log('🔍 [BUILDER DEBUG] Mensagem final (primeiros 500 chars):', finalMessage.substring(0, 500));
+
+        return finalMessage;
     }
 
     /**
@@ -75,9 +92,9 @@ export class MessageBuilder {
 
         if (priceData.discount && priceData.original) {
             // Tem desconto - mostrar de/por
-            lines.push(`💣 De: ${PriceFormatter.format(priceData.original)}`);
-            lines.push(`✅ Por: ${PriceFormatter.format(priceData.current)}`);
-            lines.push(`🤑 ${priceData.discount}% OFF`);
+            lines.push(`💰 De: ${PriceFormatter.format(priceData.original)}`);
+            lines.push(`🔥 Por: ${PriceFormatter.format(priceData.current)}`);
+            lines.push(`🎯 ${priceData.discount}% OFF`);
         } else {
             // Apenas preço atual
             lines.push(`💰 Preço: ${PriceFormatter.format(priceData.current)}`);
@@ -91,7 +108,7 @@ export class MessageBuilder {
     }
 
     static _buildLink(link) {
-        return `🛒 COMPRAR COM DESCONTO:\n👉 ${link}`;
+        return `🛒 Comprar agora:\n👉 ${link}`;
     }
 
     static _buildFooter() {

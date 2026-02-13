@@ -21,7 +21,7 @@ export class Scheduler {
         this.sendIntervalId = null;
         this.dailyResetTimeoutId = null;
         this.dailyResetIntervalId = null;
-
+        
     }
 
     start() {
@@ -119,7 +119,7 @@ export class Scheduler {
                 finalStatus[status] = statusMap[status] || 0;
             });
 
-            log.info(`📊 Status dos links no banco: ${JSON.stringify(finalStatus)}`);
+            // log.info(`📊 Status dos links no banco: ${JSON.stringify(finalStatus)}`);
         } catch (error) {
             log.warn("⚠️ Erro ao contar status dos links:", error.message);
         }
@@ -162,15 +162,10 @@ export class Scheduler {
 
                     const result = await AffiliateService.generateAffiliateLink(link);
 
-
-                    console.log(`Link =====> ${JSON.stringify(link, null, 2)}\n\n\n`
-
-                    )
-
-                    console.log(`Conteudo do resultado=============\n\n${JSON.stringify(result)}\n\n`);
                     console.log(`📦 Resultado:`, {
                         success: result.success,
                         has_link: !!result.affiliate_link,
+                        has_cupom: !!result.metadata?.cupom, // ✅ Log de debug cupom
                     });
 
                     // ========== TRATAR RESULTADO ==========
@@ -182,8 +177,9 @@ export class Scheduler {
                     log.error(`❌ Erro ao processar link ${link.id}:`, error.message);
 
                     // Marcar como failed_temporary para tentar novamente depois
-                    LinkTracker.updateLinkStatus(link.id, "failed", null, {
+                    LinkTracker.updateLinkStatus(link.id, "failed_temporary", null, {
                         error: error.message,
+                        timestamp: new Date().toISOString(),
                     });
                 }
             }
@@ -255,9 +251,10 @@ export class Scheduler {
 
     /**
      * Parte 2 - Envia links processados para grupos
-     */
-
-    async sendLinks() {
+     * ✅ CORREÇÃO BUG #7: Melhor tratamento de erros
+     */   
+   
+     async sendLinks() {
         if (this.sending) return;
         this.sending = true;
 
@@ -288,52 +285,122 @@ export class Scheduler {
                         whatsappCopy
                     );
 
-                    normalized.affiliate_link ||=
+                    normalized.affiliate_link ||= 
                         apiMetadata.affiliate_link || link.affiliate_link;
 
                     if (!normalized.affiliate_link) {
-                        throw new Error("Affiliate link ausente");
+                        // ✅ CORREÇÃO BUG #7: Erro de payload inválido = failed permanente
+                        log.error(`❌ Link ${link.id}: Affiliate link ausente (payload inválido)`);
+                        
+                        await db.run(
+                            `UPDATE tracked_links 
+                            SET status = 'failed', metadata = ? 
+                            WHERE id = ?`,
+                            [
+                                JSON.stringify({
+                                    error: "Affiliate link ausente no payload",
+                                    permanent_failure: true,
+                                    timestamp: new Date().toISOString()
+                                }),
+                                link.id
+                            ]
+                        );
+                        continue;
                     }
 
                     const payload = MessageBuilder.buildPayload(normalized);
 
                     if (!payload?.text && !payload?.caption) {
-                        throw new Error("Payload inválido");
+                        // ✅ CORREÇÃO BUG #7: Erro de payload inválido = failed permanente
+                        log.error(`❌ Link ${link.id}: Payload inválido (sem texto ou caption)`);
+                        
+                        await db.run(
+                            `UPDATE tracked_links 
+                            SET status = 'failed', metadata = ? 
+                            WHERE id = ?`,
+                            [
+                                JSON.stringify({
+                                    error: "Payload inválido: sem texto ou caption",
+                                    permanent_failure: true,
+                                    timestamp: new Date().toISOString()
+                                }),
+                                link.id
+                            ]
+                        );
+                        continue;
                     }
+
+                    // ✅ Log de debug do cupom no payload final
+                    log.info(`📤 Enviando link ${link.id} - Cupom: ${normalized.cupom || 'N/A'}`);
 
                     for (const group of targetGroups) {
                         if (!db.canSendToGroup(group.group_jid)) continue;
 
-                        await this.sock.sendMessage(group.group_jid, payload);
+                        try {
+                            await this.sock.sendMessage(group.group_jid, payload);
 
-                        await db.run(
-                            `INSERT INTO sent_links 
-                            (tracked_link_id, target_group_jid, message)
-                            VALUES (?, ?, ?)`,
-                            [link.id, group.group_jid, payload.caption || payload.text]
-                        );
+                            await db.run(
+                                `INSERT INTO sent_links 
+                                (tracked_link_id, target_group_jid, message)
+                                VALUES (?, ?, ?)`,
+                                [link.id, group.group_jid, payload.caption || payload.text]
+                            );
 
-                        db.incrementSentCount(group.group_jid);
+                            db.incrementSentCount(group.group_jid);
 
-                        await sleep(5000);
+                            await sleep(5000);
+
+                        } catch (sendError) {
+                            // ✅ CORREÇÃO BUG #7: Erro de envio = failed_temporary
+                            log.error(`⚠️ Erro ao enviar para grupo ${group.group_name}:`, sendError.message);
+                            
+                            // Continua para próximo grupo, mas marca link como failed_temporary
+                            await db.run(
+                                `UPDATE tracked_links 
+                                SET status = 'failed_temporary', metadata = ? 
+                                WHERE id = ?`,
+                                [
+                                    JSON.stringify({
+                                        error: `Erro no envio: ${sendError.message}`,
+                                        group: group.group_name,
+                                        timestamp: new Date().toISOString()
+                                    }),
+                                    link.id
+                                ]
+                            );
+                        }
                     }
 
                     // ✅ Finaliza link com sucesso
-                    // await db.run(
-                    //     `UPDATE tracked_links 
-                    //     SET status = 'sent' 
-                    //     WHERE id = ?`,
-                    //     [link.id]
-                    // );
+                    await db.run(
+                        `UPDATE tracked_links 
+                        SET status = 'sent' 
+                        WHERE id = ?`,
+                        [link.id]
+                    );
 
                 } catch (err) {
-                    log.error(`Falha no link ${link.id}`, err);
+                    // ✅ CORREÇÃO BUG #7: Distinguir entre erros permanentes e temporários
+                    const isPayloadError = err.message.includes("ausente") || 
+                                          err.message.includes("inválido");
+                    
+                    const newStatus = isPayloadError ? 'failed' : 'failed_temporary';
+                    
+                    log.error(`Falha no link ${link.id} - Status: ${newStatus}`, err);
 
                     await db.run(
                         `UPDATE tracked_links 
-                        SET status = 'failed' 
+                        SET status = ?, metadata = ? 
                         WHERE id = ?`,
-                        [link.id]
+                        [
+                            newStatus,
+                            JSON.stringify({
+                                error: err.message,
+                                permanent_failure: isPayloadError,
+                                timestamp: new Date().toISOString()
+                            }),
+                            link.id
+                        ]
                     );
                 }
 
@@ -347,12 +414,7 @@ export class Scheduler {
         }
     }
 
-
-
-
-
     // ==========================================================================
-
 
     // ==================== HELPERS ====================
 
@@ -448,22 +510,21 @@ export class Scheduler {
      * Método para passar a flag "failed_temporary" para "failed"
      * (chamar periodicamente para limpar links que falharam várias vezes)
      */
-    markPermanentFailures() {
+    markPermanentFailures() {        
 
         try {
             const result = db.run(
-                `UPDATE tracked_links
-             SET status = 'failed'
-             WHERE status = 'failed_temporary'
-               AND created_at IS NULL
-               OR (julianday('now') - julianday(created_at)) > 1`,
+            `UPDATE tracked_links
+            SET status = 'failed'
+            WHERE status = 'failed_temporary'
+            AND (created_at IS NULL OR (julianday('now') - julianday(created_at)) > 1);`,
             );
             log.info(
                 `✅ Links marcados como permanentemente falhados: ${result.changes}`,
             );
         } catch (error) {
             log.error("💥 Erro ao marcar falhas permanentes:", error);
-        }
+        } 
     }
 
     markTemporaryFailuresAsPending() {

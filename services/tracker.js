@@ -5,18 +5,17 @@ import { log } from "../core/logger.js";
 
 export class LinkTracker {
   static extractLinks(text) {
-    // log.info('Extraindo links de:', text);
-
     const urlRegex = /https?:\/\/[^\s]+/gi;
-    let testMatch = text.match(urlRegex);
-    let description = "";
+    const urls = text.match(urlRegex) || [];
+    
+    // ✅ CORREÇÃO BUG #2: Remover URLs do texto para obter descrição limpa
+    let description = text;
+    urls.forEach(url => {
+      description = description.replace(url, '');
+    });
+    description = description.trim();
 
-    if (!testMatch) {
-      description = text.replace(testMatch);
-      console.log("Descrição encontrada:", description  )
-    }
-
-    return (testMatch || []).map((url) => ({
+    return urls.map((url) => ({
       url,
       domain: new URL(url).hostname.replace("www.", ""),
       description: description || "",
@@ -58,36 +57,51 @@ export class LinkTracker {
         return 0;
       }
 
+      // ✅ CORREÇÃO BUG #1: Resolver texto com fallback robusto para estruturas Baileys
+      const rawText = (
+        text ||
+        msg?.message?.extendedTextMessage?.text ||
+        msg?.message?.conversation ||
+        msg?.message?.imageMessage?.caption ||
+        msg?.message?.videoMessage?.caption ||
+        msg?.message?.ephemeralMessage?.message?.extendedTextMessage?.text ||
+        msg?.message?.ephemeralMessage?.message?.conversation ||
+        ""
+      ).trim();
+      if( rawText.length === 0) {
+        rawText = text || "";
+      }
+
       // se text contem "www." ou "http" ou "https"
-      if (!text.includes("www.") && !text.includes("http")) {
+      if (!rawText.includes("www.") && !rawText.includes("http")) {
         return 0;
       }
 
       //Se for link de whatsapp ignorar
-      if (text.includes("https://chat.whatsapp.com/")) {
+      if (rawText.includes("https://chat.whatsapp.com/")) {
         return 0;
       }
 
-      // Ignorar facebook, yputube e instagram
+      // Ignorar facebook, youtube e instagram
       if (
-        text.includes("facebook.com") ||
-        text.includes("youtube.com") ||
-        text.includes("youtu.be") ||
-        text.includes("twitter.com") ||
-        text.includes("instagram.com") ||
-        text.includes("t.me") ||
-        text.includes("tiktok.com") ||
-        text.includes("open.spotify.com") ||
-        text.includes("oia.99app.com") ||
-        text.includes("ifood.com.br") ||
-        text.includes("play.google.com") ||
-        text.includes("app.apple.com")
+        rawText.includes("facebook.com") ||
+        rawText.includes("youtube.com") ||
+        rawText.includes("youtu.be") ||
+        rawText.includes("twitter.com") ||
+        rawText.includes("instagram.com") ||
+        rawText.includes("t.me") ||
+        rawText.includes("tiktok.com") ||
+        rawText.includes("open.spotify.com") ||
+        rawText.includes("oia.99app.com") ||
+        rawText.includes("ifood.com.br") ||
+        rawText.includes("play.google.com") ||
+        rawText.includes("app.apple.com")
       ) {
         return 0;
       }
 
-      // Extrair links
-      const links = this.extractLinks(text);
+      // Extrair links usando rawText
+      const links = this.extractLinks(rawText);
 
       log.info("Links extraídos:", links || []);
       if (links.length === 0) return 0;
@@ -97,8 +111,6 @@ export class LinkTracker {
         this.isRegisteredDomain(link.domain),
       );
       if (validLinks.length === 0) return 0;
-
-      //   log.info(JSON.stringify(msg, null, 2));
 
       // Obter informações do grupo
       let groupName = "Desconhecido";
@@ -146,14 +158,36 @@ export class LinkTracker {
           continue;
         }
 
-        let copy = msg.message?.extendedTextMessage || {};
-        if (config.is_description){
-          copy.description = link.description;
-        } else copy.description = "";
+        // ✅ CORREÇÃO BUG #3: Salvar copy_text com estrutura robusta
+        // Inclui tanto o texto resolvido quanto partes relevantes do objeto msg
+        const copy = {
+          text: rawText,
+          description: link.description || rawText,
+          msg: {
+            conversation: msg?.message?.conversation,
+            extendedTextMessage: msg?.message?.extendedTextMessage,
+            imageMessage: msg?.message?.imageMessage 
+              ? {
+                  caption: msg.message.imageMessage.caption,
+                  jpegThumbnail: msg.message.imageMessage.jpegThumbnail
+                }
+              : undefined,
+            videoMessage: msg?.message?.videoMessage
+              ? {
+                  caption: msg.message.videoMessage.caption,
+                  jpegThumbnail: msg.message.videoMessage.jpegThumbnail
+                }
+              : undefined,
+            ephemeralMessage: msg?.message?.ephemeralMessage?.message
+              ? {
+                  conversation: msg.message.ephemeralMessage.message.conversation,
+                  extendedTextMessage: msg.message.ephemeralMessage.message.extendedTextMessage
+                }
+              : undefined
+          }
+        };
 
         const copy_text = JSON.stringify(copy);
-
-
         
         // Inserir link
         db.run(
