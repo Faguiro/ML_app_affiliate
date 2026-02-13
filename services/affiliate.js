@@ -174,7 +174,7 @@ export class AffiliateService {
           metadata.ai_description = aiDescription;
           log.info("✨ Descrição gerada com sucesso");
         } else {
-          log.warn("⚠️ IA retornou descrição vazia");
+          log.warn("⚠️ IA retornou descrição vazia");  
         }
       } catch (err) {
         log.warn("⚠️ IA falhou:", err.message);

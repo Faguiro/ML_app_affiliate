@@ -75,9 +75,9 @@ export class MessageBuilder {
 
         if (priceData.discount && priceData.original) {
             // Tem desconto - mostrar de/por
-            lines.push(`💰 De: ${PriceFormatter.format(priceData.original)}`);
-            lines.push(`🔥 Por: ${PriceFormatter.format(priceData.current)}`);
-            lines.push(`🎯 ${priceData.discount}% OFF`);
+            lines.push(`💣 De: ${PriceFormatter.format(priceData.original)}`);
+            lines.push(`✅ Por: ${PriceFormatter.format(priceData.current)}`);
+            lines.push(`🤑 ${priceData.discount}% OFF`);
         } else {
             // Apenas preço atual
             lines.push(`💰 Preço: ${PriceFormatter.format(priceData.current)}`);
@@ -91,10 +91,16 @@ export class MessageBuilder {
     }
 
     static _buildLink(link) {
-        return `🛒 Comprar agora:\n👉 ${link}`;
+        return `🛒 COMPRAR COM DESCONTO:\n👉 ${link}`;
     }
 
     static _buildFooter() {
+
+        let randon_footer = [
+            `✅ Entrega garantida`,
+            `🛡️ Compra segura`,            
+        ]
+        // implementar randon footer no futuro
         return `🛡️ Compra segura`;
     }
 

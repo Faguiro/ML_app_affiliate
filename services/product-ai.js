@@ -38,6 +38,13 @@ export class ProductDescriptionAI {
             return false;
         }
         
+        if (config.is_description || config.aiEnabled) {
+            log.info("================== Descrição po IA desabilitada. =======================")
+            return false;
+        }      
+        log.info("================== Descrição po IA habilitada. =======================")
+    
+        
         groq = new Groq({
             apiKey: process.env.GROQ_API_KEY
         });
@@ -99,10 +106,10 @@ export class ProductDescriptionAI {
                         🎯 OBJETIVO: Criar uma descrição curta e impactante que gere interesse no produto.
 
                         📝 DIRETRIZES CRÍTICAS:
-                        - MÁXIMO 2-3 frases
+                        - MÁXIMO 2 frases
                         - Linguagem informal e envolvente
                         - Destaque benefícios ou características principais
-                        - Use emojis relevantes (máx 3-4)
+                        - Use emojis relevantes (máx 2)
                         - Não repita o título do produto
                         - NUNCA mencione preços, cupons ou promoções
                         - NUNCA mencione "compre agora" ou "clique aqui"
@@ -118,10 +125,10 @@ export class ProductDescriptionAI {
 
                         📌 EXEMPLOS CORRETOS:
                         Título: "Fone Bluetooth com Cancelamento de Ruído"
-                        Descrição: "🎧 Imersão sonora completa! Ideal para quem trabalha em ambientes barulhentos ou ama música sem interferências. A qualidade de áudio vai te surpreender! ✨"
+                        Descrição: "🎧 Imersão sonora completa!  A qualidade de áudio vai te surpreender! ✨"
 
                         Título: "Kit Ferramentas Profissional 150 Peças"
-                        Descrição: "🔧 Para projetos DIY ou profissionais! Kit completo com tudo que você precisa para reparos e montagens. Durabilidade e precisão em cada peça. 💪"`
+                        Descrição: "🔧 Para projetos DIY ou profissionais! Durabilidade e precisão em cada peça. 💪"`
                     },
                     {
                         role: "user",
@@ -139,6 +146,7 @@ export class ProductDescriptionAI {
                 log.info(`Descrição gerada: ${description.substring(0, 350)}`);
                 return description;
             } else {
+                log.warn('Sem descrição gerada. Retornando descrição padrão.');
                 return this.getDefaultDescription(productTitle);
             }
 

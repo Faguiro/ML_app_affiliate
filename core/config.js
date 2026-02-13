@@ -83,7 +83,11 @@ class Config {
     }
 
     get aiEnabled() {
-        return process.env.AI_ENABLED === 'true' && !!process.env.GROQ_API_KEY;
+        return process.env.AI_ENABLED === "true" 
+    }
+
+    get is_description() {
+        return process.env.DESCRIPTION === 'true' 
     }
 }
 

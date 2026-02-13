@@ -6,10 +6,20 @@ import { log } from "../core/logger.js";
 export class LinkTracker {
   static extractLinks(text) {
     // log.info('Extraindo links de:', text);
+
     const urlRegex = /https?:\/\/[^\s]+/gi;
-    return (text.match(urlRegex) || []).map((url) => ({
+    let testMatch = text.match(urlRegex);
+    let description = "";
+
+    if (!testMatch) {
+      description = text.replace(testMatch);
+      console.log("Descrição encontrada:", description  )
+    }
+
+    return (testMatch || []).map((url) => ({
       url,
       domain: new URL(url).hostname.replace("www.", ""),
+      description: description || "",
     }));
   }
 
@@ -72,7 +82,6 @@ export class LinkTracker {
         text.includes("ifood.com.br") ||
         text.includes("play.google.com") ||
         text.includes("app.apple.com")
-
       ) {
         return 0;
       }
@@ -89,7 +98,7 @@ export class LinkTracker {
       );
       if (validLinks.length === 0) return 0;
 
-    //   log.info(JSON.stringify(msg, null, 2));
+      //   log.info(JSON.stringify(msg, null, 2));
 
       // Obter informações do grupo
       let groupName = "Desconhecido";
@@ -107,7 +116,6 @@ export class LinkTracker {
         log.error("Erro ao obter metadata do grupo", error);
         return 0;
       }
-
 
       // Salvar cada link (evitando duplicados)
       let savedCount = 0;
@@ -138,10 +146,15 @@ export class LinkTracker {
           continue;
         }
 
+        let copy = msg.message?.extendedTextMessage || {};
+        if (config.is_description){
+          copy.description = link.description;
+        } else copy.description = "";
+
+        const copy_text = JSON.stringify(copy);
+
+
         
-
-        let copy = JSON.stringify(msg.message?.extendedTextMessage);
-
         // Inserir link
         db.run(
           `INSERT INTO tracked_links 
@@ -152,7 +165,7 @@ export class LinkTracker {
             link.domain,
             jid,
             msg.pushName || "Desconhecido",
-            copy || "",
+            copy_text || "",
           ],
         );
 
