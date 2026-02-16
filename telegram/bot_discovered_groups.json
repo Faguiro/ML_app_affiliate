@@ -4,13 +4,23 @@
     "username": "hypeofertasbot",
     "first_name": "HypeOfertas"
   },
-  "groups_found": 1,
+  "groups_found": 2,
   "groups": [
+    {
+      "id": -1003301530947,
+      "title": "HYPE OFERTAS 🚀 SUPER PROMOÇÕES E CUPONS",
+      "source": "shared_group",
+      "entity": "Channel(id=3301530947, title='HYPE OFERTAS 🚀 SUPER PROMOÇÕES E CUPONS', photo=ChatPhoto(photo_id=5028489161622620948, dc_id=1, has_video=False, stripped_thumb=b'\\x01\\x08\\x08\\xd2\\xcb\\xfd\\xa3\\xef\\x1d\\xbf\\xdd\\xa2\\x8a)\\x0eG'), date=datetime.datetime(2025, 12, 24, 3, 33, 14, tzinfo=datetime.timezone.utc), creator=False, left=False, broadcast=True, verified=False, megagroup=False, restricted=False, signatures=False, min=False, scam=False, has_link=True, has_geo=False, slowmode_enabled=False, call_active=False, call_not_empty=False, fake=False, gigagroup=False, noforwards=False, join_to_send=False, join_request=False, forum=False, stories_hidden=False, stories_hidden_min=False, stories_unavailable=True, signature_profiles=False, autotranslation=False, broadcast_messages_allowed=False, monoforum=False, forum_tabs=False, access_hash=-4594062068106989266, username='hypeofertas', restriction_reason=[], admin_rights=ChatAdminRights(change_info=True, post_messages=True, edit_messages=True, delete_messages=True, ban_users=False, invite_users=True, pin_messages=False, add_admins=True, anonymous=False, manage_call=True, other=True, manage_topics=False, post_stories=True, edit_stories=True, delete_stories=True, manage_direct_messages=True), banned_rights=None, default_banned_rights=None, participants_count=8, usernames=[], stories_max_id=None, color=None, profile_color=None, emoji_status=None, level=None, subscription_until_date=None, bot_verification_icon=None, send_paid_messages_stars=None, linked_monoforum_id=None)",
+      "username": "hypeofertas",
+      "type": "channel",
+      "is_admin": false,
+      "can_send": true
+    },
     {
       "id": -5195270518,
       "title": "Grupo teste de rastreio",
       "source": "shared_group",
-      "entity": "Chat(id=5195270518, title='Grupo teste de rastreio', photo=ChatPhotoEmpty(), participants_count=3, date=datetime.datetime(2026, 1, 6, 23, 34, 16, tzinfo=datetime.timezone.utc), version=6, creator=False, left=False, deactivated=False, call_active=False, call_not_empty=False, noforwards=False, migrated_to=None, admin_rights=ChatAdminRights(change_info=True, post_messages=False, edit_messages=False, delete_messages=True, ban_users=True, invite_users=True, pin_messages=True, add_admins=False, anonymous=False, manage_call=True, other=True, manage_topics=True, post_stories=False, edit_stories=False, delete_stories=False, manage_direct_messages=False), default_banned_rights=ChatBannedRights(until_date=datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=datetime.timezone.utc), view_messages=False, send_messages=False, send_media=False, send_stickers=False, send_gifs=False, send_games=False, send_inline=False, embed_links=False, send_polls=False, change_info=False, invite_users=False, pin_messages=False, manage_topics=False, send_photos=False, send_videos=False, send_roundvideos=False, send_audios=False, send_voices=False, send_docs=False, send_plain=False))",
+      "entity": "Chat(id=5195270518, title='Grupo teste de rastreio', photo=ChatPhotoEmpty(), participants_count=4, date=datetime.datetime(2026, 1, 6, 23, 34, 16, tzinfo=datetime.timezone.utc), version=7, creator=False, left=False, deactivated=False, call_active=False, call_not_empty=False, noforwards=False, migrated_to=None, admin_rights=ChatAdminRights(change_info=True, post_messages=False, edit_messages=False, delete_messages=True, ban_users=True, invite_users=True, pin_messages=True, add_admins=False, anonymous=False, manage_call=True, other=True, manage_topics=True, post_stories=False, edit_stories=False, delete_stories=False, manage_direct_messages=False), default_banned_rights=ChatBannedRights(until_date=datetime.datetime(2038, 1, 19, 3, 14, 7, tzinfo=datetime.timezone.utc), view_messages=False, send_messages=False, send_media=False, send_stickers=False, send_gifs=False, send_games=False, send_inline=False, embed_links=False, send_polls=False, change_info=False, invite_users=False, pin_messages=False, manage_topics=False, send_photos=False, send_videos=False, send_roundvideos=False, send_audios=False, send_voices=False, send_docs=False, send_plain=False))",
       "username": null,
       "type": "group",
       "is_admin": false,

@@ -1,6 +1,15 @@
 {
   "groups": [
     {
+      "id": -1003301530947,
+      "name": "HYPE OFERTAS 🚀 SUPER PROMOÇÕES E CUPONS",
+      "active": true,
+      "tags": [
+        "canal",
+        "geral"
+      ]
+    },
+    {
       "id": -5195270518,
       "name": "Grupo teste de rastreio",
       "active": true,

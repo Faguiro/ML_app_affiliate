@@ -37,40 +37,43 @@ export class LinkTracker {
   }
 
   static async track(sock, msg, text) {
-    try {
-      const jid = msg.key.remoteJid;
+  try {
+    const jid = msg.key.remoteJid;
 
-      // Ignorar se não for grupo
-      if (!jid.endsWith("@g.us")) return 0;
+    // Ignorar se não for grupo
+    if (!jid.endsWith("@g.us")) return 0;
 
-      // Ignorar mensagens do próprio bot
-      if (msg.key.fromMe) return 0;
+    // Ignorar mensagens do próprio bot
+    if (msg.key.fromMe) return 0;
 
-      // Ignorar grupos da lista de envio
-      const isTargetGroup = db.get(
-        `SELECT id FROM target_groups WHERE group_jid = ?`,
-        [jid],
-      );
+    // Ignorar grupos da lista de envio
+    const isTargetGroup = db.get(
+      `SELECT id FROM target_groups WHERE group_jid = ?`,
+      [jid],
+    );
 
-      if (isTargetGroup) {
-        log.info(`Ignorando mensagem de grupo de envio: ${jid}`);
-        return 0;
-      }
+    if (isTargetGroup) {
+      log.info(`Ignorando mensagem de grupo de envio: ${jid}`);
+      return 0;
+    }
 
-      // ✅ CORREÇÃO BUG #1: Resolver texto com fallback robusto para estruturas Baileys
-      const rawText = (
-        text ||
-        msg?.message?.extendedTextMessage?.text ||
-        msg?.message?.conversation ||
-        msg?.message?.imageMessage?.caption ||
-        msg?.message?.videoMessage?.caption ||
-        msg?.message?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-        msg?.message?.ephemeralMessage?.message?.conversation ||
-        ""
-      ).trim();
-      if( rawText.length === 0) {
-        rawText = text || "";
-      }
+    // ✅ CORREÇÃO BUG #1: Resolver texto com fallback robusto para estruturas Baileys
+    let rawText = (
+      text ||
+      msg?.message?.extendedTextMessage?.text ||
+      msg?.message?.conversation ||
+      msg?.message?.imageMessage?.caption ||
+      msg?.message?.videoMessage?.caption ||
+      msg?.message?.ephemeralMessage?.message?.extendedTextMessage?.text ||
+      msg?.message?.ephemeralMessage?.message?.conversation ||
+      ""
+    ).trim();
+
+    if (rawText.length === 0) {
+      rawText = text || "";
+    }
+
+    log.debug(`Texto extraído: ${rawText.substring(0, 100)}...`);
 
       // se text contem "www." ou "http" ou "https"
       if (!rawText.includes("www.") && !rawText.includes("http")) {

@@ -261,6 +261,8 @@ class WhatsAppBot {
     const msg = messages[0];
     if (!msg?.message) return;
 
+	log.info(JSON.stringify(msg))
+
     const jid = msg.key.remoteJid;
 
     function unwrapMessage(message) {

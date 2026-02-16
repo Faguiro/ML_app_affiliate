@@ -176,8 +176,8 @@ export class Scheduler {
                 } catch (error) {
                     log.error(`❌ Erro ao processar link ${link.id}:`, error.message);
 
-                    // Marcar como failed 
-                    LinkTracker.updateLinkStatus(link.id, "failed", null, {
+                    // Marcar como failed_temporary para tentar novamente depois
+                    LinkTracker.updateLinkStatus(link.id, "failed_temporary", null, {
                         error: error.message,
                         timestamp: new Date().toISOString(),
                     });
@@ -210,11 +210,11 @@ export class Scheduler {
             return;
         }
 
-        // ========== FALHA TEMPORÁRIA (após 3 tentativas) provavelmente uma lista de produtos ==========
+        // ========== FALHA PERMANENTE (após 3 tentativas) ==========
         if (result.permanent_failure) {
             log.error(`❌ Link ${linkId} marcado como falha permanente`);
 
-            LinkTracker.updateLinkStatus(linkId, "failed_temporary", null, {
+            LinkTracker.updateLinkStatus(linkId, "failed", null, {
                 error: result.error || "Falha permanente após 3 tentativas",
                 permanent_failure: true,
                 timestamp: new Date().toISOString(),
@@ -357,21 +357,27 @@ export class Scheduler {
                             // Continua para próximo grupo, mas marca link como failed_temporary
                             await db.run(
                                 `UPDATE tracked_links 
-                                SET status = 'failed_temporary'
+                                SET status = 'failed_temporary', metadata = ? 
                                 WHERE id = ?`,
-                                [ link.id ]
+                                [
+                                    JSON.stringify({
+                                        error: `Erro no envio: ${sendError.message}`,
+                                        group: group.group_name,
+                                        timestamp: new Date().toISOString()
+                                    }),
+                                    link.id
+                                ]
                             );
                         }
                     }
 
                     // ✅ Finaliza link com sucesso
-                    // Não finalizar com sent agora porque o bot do Telegram vai usar ainda
-                    await db.run(
-                        `UPDATE tracked_links 
-                        SET status = 'w-sent', processed_at = datetime('now') 
-                        WHERE id = ?`,
-                        [link.id]
-                    );
+                    // await db.run(
+                    //     `UPDATE tracked_links 
+                    //     SET status = 'sent' 
+                    //     WHERE id = ?`,
+                    //     [link.id]
+                    // );
 
                 } catch (err) {
                     // ✅ CORREÇÃO BUG #7: Distinguir entre erros permanentes e temporários

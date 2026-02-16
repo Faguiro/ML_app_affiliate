@@ -107,13 +107,7 @@ class TelegramSender:
             cursor.execute("""
                 SELECT tl.id, tl.affiliate_link, tl.metadata, tl.copy_text
                 FROM tracked_links tl
-                WHERE tl.status = 'ready'
-                AND tl.affiliate_link IS NOT NULL
-                AND tl.affiliate_link != ''
-                AND NOT EXISTS (
-                    SELECT 1 FROM telegram_sent ts
-                    WHERE ts.tracked_link_id = tl.id
-                )
+                WHERE tl.status = 'w-sent'
                 LIMIT 5
             """)
 
@@ -203,22 +197,39 @@ class TelegramSender:
             return None
 
     def mark_as_sent(self, link_id):
-        """Registra envio no banco"""
+        """Registra envio no banco e atualiza status para 'complete'"""
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-
+            
+            # 1. Registra na tabela telegram_sent
             cursor.execute("""
                 INSERT OR IGNORE INTO telegram_sent (tracked_link_id) VALUES (?)
             """, (link_id,))
-
+            
+            # 2. Atualiza status do link para 'complete'
+            cursor.execute("""
+                UPDATE tracked_links 
+                SET status = 'complete',
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (link_id,))
+            
             conn.commit()
-            conn.close()
+            logger.debug(f"✅ Link {link_id} marcado como 'complete'")
             return True
-
+            
         except Exception as e:
-            logger.error(f"Erro ao marcar como enviado: {e}")
+            logger.error(f"❌ Erro ao marcar link {link_id} como enviado: {e}")
+            if conn:
+                conn.rollback()
             return False
+        finally:
+            if conn:
+                conn.close()
+
+   
 
     def create_message(self, affiliate_link, metadata, copy_text=None):
         if not metadata:
@@ -240,7 +251,7 @@ class TelegramSender:
 
             # ✨ Descrição boa (ignora description lixo)
             if ai_desc:
-                parts.append(f"✨ {ai_desc}")
+                #parts.append(f"✨ {ai_desc}")
                 parts.append("")
 
             # 💰 Preço
